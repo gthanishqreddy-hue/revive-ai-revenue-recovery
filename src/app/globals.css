@@ -1,0 +1,460 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:ital,opsz,wght@0,14..32,300;0,14..32,400;0,14..32,500;0,14..32,600;0,14..32,700;1,14..32,300&family=JetBrains+Mono:wght@400;500&display=swap');
+@import "tailwindcss";
+
+/* ============================================================
+   REVIVE — Global Design System
+   Color Philosophy: Near-black foundation, color reserved for
+   financial state, AI activity, and system outcomes.
+   ============================================================ */
+
+:root {
+  /* Base surfaces — near-black with subtle blue undertone */
+  --bg-void:    #050608;
+  --bg-base:    #080c12;
+  --bg-surface: #0c1018;
+  --bg-card:    #0f1520;
+  --bg-hover:   #141d2c;
+  --bg-subtle:  #1a2438;
+
+  /* Borders */
+  --border:        rgba(255,255,255,0.07);
+  --border-medium: rgba(255,255,255,0.12);
+  --border-bright: rgba(255,255,255,0.18);
+
+  /* Accent — electric blue, used sparingly */
+  --accent:       #4f8ef7;
+  --accent-soft:  #3b7de8;
+  --accent-dim:   rgba(79, 142, 247, 0.12);
+  --accent-glow:  rgba(79, 142, 247, 0.25);
+
+  /* Violet — AI/intelligence actions */
+  --violet:     #7c6fe8;
+  --violet-dim: rgba(124, 111, 232, 0.12);
+
+  /* Mint/Green — recovered revenue (success) */
+  --mint:        #34d399;
+  --mint-bright: #4ade80;
+  --mint-dim:    rgba(52, 211, 153, 0.10);
+  --mint-glow:   rgba(52, 211, 153, 0.20);
+
+  /* Amber — warnings, pending */
+  --amber:     #f59e0b;
+  --amber-dim: rgba(245, 158, 11, 0.12);
+
+  /* Red — failures only */
+  --danger:     #f87171;
+  --danger-dim: rgba(248, 113, 113, 0.10);
+
+  /* Text hierarchy */
+  --text-primary:   #f0f4ff;
+  --text-secondary: #8892a4;
+  --text-muted:     #4a5568;
+  --text-ghost:     #2d3748;
+
+  /* Typography scale tokens */
+  --font-display: 'Inter', system-ui, sans-serif;
+  --font-mono:    'JetBrains Mono', 'Fira Code', monospace;
+
+  /* Spacing rhythm */
+  --radius-sm:  6px;
+  --radius-md:  10px;
+  --radius-lg:  16px;
+  --radius-xl:  24px;
+
+  /* Grain overlay */
+  --grain-opacity: 0.028;
+}
+
+/* ============================================================
+   RESET & BASE
+   ============================================================ */
+
+*, *::before, *::after {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+html {
+  font-family: var(--font-display);
+  background-color: var(--bg-void);
+  color: var(--text-primary);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  scroll-behavior: smooth;
+  text-rendering: optimizeLegibility;
+}
+
+body {
+  min-height: 100vh;
+  background: var(--bg-void);
+  overflow-x: hidden;
+}
+
+/* Reduced motion respect */
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+  html { scroll-behavior: auto; }
+}
+
+/* ============================================================
+   SCROLLBAR
+   ============================================================ */
+
+::-webkit-scrollbar { width: 4px; height: 4px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb {
+  background: rgba(255,255,255,0.08);
+  border-radius: 2px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: rgba(255,255,255,0.15);
+}
+
+/* ============================================================
+   GRAIN TEXTURE — felt, not seen
+   ============================================================ */
+
+.grain::after {
+  content: '';
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  z-index: 9999;
+  opacity: var(--grain-opacity);
+  background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noise'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noise)'/%3E%3C/svg%3E");
+  background-size: 200px 200px;
+  mix-blend-mode: overlay;
+}
+
+/* ============================================================
+   TYPOGRAPHY
+   ============================================================ */
+
+.mono {
+  font-family: var(--font-mono);
+  font-variant-numeric: tabular-nums;
+  letter-spacing: -0.01em;
+}
+
+/* Landing / marketing headings */
+.display-xl {
+  font-size: clamp(3rem, 7vw, 6.5rem);
+  font-weight: 300;
+  letter-spacing: -0.04em;
+  line-height: 1.0;
+}
+
+.display-lg {
+  font-size: clamp(2rem, 4.5vw, 4rem);
+  font-weight: 300;
+  letter-spacing: -0.03em;
+  line-height: 1.05;
+}
+
+.display-md {
+  font-size: clamp(1.4rem, 2.5vw, 2.2rem);
+  font-weight: 400;
+  letter-spacing: -0.02em;
+  line-height: 1.2;
+}
+
+/* Operational UI */
+.label-xs {
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+}
+
+/* ============================================================
+   STATUS BADGE
+   ============================================================ */
+
+.badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 2px 8px;
+  border-radius: 20px;
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+/* ============================================================
+   CARDS
+   ============================================================ */
+
+.card {
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+}
+
+.card-surface {
+  background: var(--bg-surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+}
+
+/* ============================================================
+   METRIC CARDS
+   ============================================================ */
+
+.metric-card {
+  transition: transform 0.25s ease, box-shadow 0.25s ease, border-color 0.25s ease;
+}
+.metric-card:hover {
+  transform: translateY(-2px);
+  border-color: var(--border-medium);
+  box-shadow: 0 12px 40px rgba(0,0,0,0.4);
+}
+
+/* ============================================================
+   NAVIGATION
+   ============================================================ */
+
+.nav-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 7px 10px;
+  border-radius: var(--radius-md);
+  font-size: 13.5px;
+  font-weight: 450;
+  color: var(--text-secondary);
+  transition: color 0.15s ease, background 0.15s ease;
+  cursor: pointer;
+  text-decoration: none;
+  border: 1px solid transparent;
+}
+.nav-item:hover {
+  background: var(--bg-hover);
+  color: var(--text-primary);
+}
+.nav-item.active {
+  background: var(--accent-dim);
+  color: var(--accent);
+  border-color: rgba(79, 142, 247, 0.2);
+}
+
+/* ============================================================
+   TABLE ROWS
+   ============================================================ */
+
+.table-row {
+  transition: background 0.12s ease;
+  cursor: pointer;
+}
+.table-row:hover {
+  background: var(--bg-hover);
+}
+
+/* ============================================================
+   BUTTONS
+   ============================================================ */
+
+.btn-primary {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  background: var(--accent);
+  color: white;
+  padding: 10px 22px;
+  border-radius: var(--radius-md);
+  font-size: 14px;
+  font-weight: 500;
+  border: none;
+  cursor: pointer;
+  transition: background 0.15s ease, transform 0.15s ease, box-shadow 0.15s ease;
+  outline: none;
+}
+.btn-primary:hover {
+  background: var(--accent-soft);
+  transform: translateY(-1px);
+  box-shadow: 0 8px 24px var(--accent-glow);
+}
+.btn-primary:active { transform: translateY(0); }
+
+.btn-ghost {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  background: transparent;
+  color: var(--text-secondary);
+  padding: 10px 18px;
+  border-radius: var(--radius-md);
+  font-size: 14px;
+  font-weight: 450;
+  border: 1px solid var(--border);
+  cursor: pointer;
+  transition: color 0.15s ease, border-color 0.15s ease, background 0.15s ease;
+}
+.btn-ghost:hover {
+  color: var(--text-primary);
+  border-color: var(--border-medium);
+  background: var(--bg-hover);
+}
+
+/* ============================================================
+   ANIMATIONS — CSS keyframes
+   ============================================================ */
+
+@keyframes pulse-dot {
+  0%, 100% { opacity: 1; transform: scale(1); }
+  50%       { opacity: 0.4; transform: scale(0.75); }
+}
+.pulse-dot { animation: pulse-dot 2.2s ease-in-out infinite; }
+
+@keyframes ping-ring {
+  0%   { transform: scale(1); opacity: 0.8; }
+  100% { transform: scale(2.2); opacity: 0; }
+}
+.ping-ring { animation: ping-ring 2s ease-out infinite; }
+
+/* Shimmer skeleton */
+@keyframes shimmer {
+  from { background-position: -200% 0; }
+  to   { background-position:  200% 0; }
+}
+.shimmer {
+  background: linear-gradient(90deg,
+    var(--bg-card) 25%,
+    var(--bg-hover) 50%,
+    var(--bg-card) 75%
+  );
+  background-size: 200% 100%;
+  animation: shimmer 1.8s ease-in-out infinite;
+  border-radius: var(--radius-sm);
+}
+
+/* Number counter reveal */
+@keyframes slideIn {
+  from { opacity: 0; transform: translateY(6px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+.slide-in { animation: slideIn 0.28s ease-out forwards; }
+
+/* Float for particle elements */
+@keyframes float {
+  0%, 100% { transform: translateY(0px); }
+  50%       { transform: translateY(-6px); }
+}
+
+/* Pipeline connector pulse */
+@keyframes flow-down {
+  0%   { opacity: 0; transform: translateY(-4px); }
+  50%  { opacity: 1; }
+  100% { opacity: 0; transform: translateY(8px); }
+}
+
+/* ============================================================
+   GLOW EFFECTS
+   ============================================================ */
+
+.glow-blue   { box-shadow: 0 0 24px var(--accent-glow); }
+.glow-mint   { box-shadow: 0 0 24px var(--mint-glow); }
+.glow-violet { box-shadow: 0 0 24px rgba(124, 111, 232, 0.25); }
+
+/* ============================================================
+   GLASSMORPHISM
+   ============================================================ */
+
+.glass {
+  background: rgba(12, 16, 24, 0.75);
+  backdrop-filter: blur(16px) saturate(1.2);
+  border: 1px solid var(--border);
+}
+
+/* ============================================================
+   GRADIENT TEXT
+   ============================================================ */
+
+.text-gradient-blue {
+  background: linear-gradient(135deg, var(--accent) 0%, #a5b4fc 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+
+.text-gradient-mint {
+  background: linear-gradient(135deg, var(--mint) 0%, #6ee7b7 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+
+.text-gradient-hero {
+  background: linear-gradient(135deg, #f0f4ff 0%, rgba(240,244,255,0.55) 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+
+/* ============================================================
+   CHART CONTAINER
+   ============================================================ */
+
+.chart-container {
+  width: 100%;
+  overflow: hidden;
+}
+
+/* ============================================================
+   LIVE INDICATOR
+   ============================================================ */
+
+.live-dot {
+  position: relative;
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--mint);
+}
+.live-dot::before {
+  content: '';
+  position: absolute;
+  inset: -3px;
+  border-radius: 50%;
+  border: 1px solid var(--mint);
+  animation: ping-ring 2s ease-out infinite;
+}
+
+/* ============================================================
+   LANDING PAGE — scroll behavior
+   ============================================================ */
+
+.landing-section {
+  min-height: 100svh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  position: relative;
+}
+
+/* ============================================================
+   PIPELINE CONNECTOR
+   ============================================================ */
+
+.pipeline-connector {
+  width: 1px;
+  background: linear-gradient(to bottom, var(--border-medium), transparent);
+  flex-shrink: 0;
+}
+
+/* ============================================================
+   FOCUS STYLES (accessibility)
+   ============================================================ */
+
+:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+  border-radius: 4px;
+}
