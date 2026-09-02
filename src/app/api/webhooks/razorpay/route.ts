@@ -110,7 +110,7 @@ export async function POST(req: Request) {
 
       // Mark event as being processed
       await execute(
-        `UPDATE payment_events SET processed = 1 WHERE id = ?`,
+        `UPDATE payment_events SET processed = TRUE WHERE id = ?`,
         [eventId]
       )
 

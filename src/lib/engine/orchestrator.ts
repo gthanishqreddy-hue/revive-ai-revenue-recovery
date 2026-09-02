@@ -307,7 +307,7 @@ export async function runRecoveryPipeline(
   const notificationsToday = await query<{ count: number }>(
     `SELECT COUNT(*) as count FROM recovery_attempts ra
      JOIN recovery_cases rc ON ra.case_id = rc.id
-     WHERE rc.merchant_id = ? AND ra.started_at > datetime('now', '-1 day')
+     WHERE rc.merchant_id = ? AND ra.started_at > NOW() - INTERVAL '1 day'
      AND ra.strategy IN ('SEND_WHATSAPP','SEND_EMAIL','VOICE_CALL','GENERATE_PAYMENT_LINK')`,
     [merchantId]
   )
@@ -482,7 +482,7 @@ export async function runRecoveryPipeline(
         [
           customer.id,
           newRecoverySuccessRate,
-          (customer.total_spent ?? 0) > 1000000 ? 1 : 0,
+          (customer.total_spent ?? 0) > 1000000 ? true : false,
           new Date().toISOString(),
         ]
       )

@@ -76,7 +76,7 @@ export async function seedDemoData(): Promise<void> {
   // 1. Create demo merchant
   await execute(
     `INSERT INTO merchants (id, name, email, api_key, is_demo) VALUES (?, ?, ?, ?, ?)`,
-    [DEMO_MERCHANT_ID, 'Acme Commerce (Demo)', DEMO_MERCHANT_EMAIL, 'rzp_test_demo_key', 1]
+    [DEMO_MERCHANT_ID, 'Acme Commerce (Demo)', DEMO_MERCHANT_EMAIL, 'rzp_test_demo_key', true]
   )
 
   // 2. Create merchant policy
@@ -121,7 +121,7 @@ export async function seedDemoData(): Promise<void> {
        Math.round((successfulPayments / totalPayments) * 100) / 100,
        randomInt(0, 30),
        Math.round(Math.random() * 100) / 100,
-       totalSpent > 1000000 ? 1 : 0]
+       totalSpent > 1000000 ? true : false]
     )
   }
 
@@ -162,7 +162,7 @@ export async function seedDemoData(): Promise<void> {
     const eventId = `evt_demo_${uuidv4().slice(0, 8)}`
     await execute(
       `INSERT INTO payment_events (id, merchant_id, transaction_id, event_type, payload, idempotency_key, processed, source)
-       VALUES (?, ?, ?, 'payment.failed', ?, ?, 1, 'demo')`,
+       VALUES (?, ?, ?, 'payment.failed', ?, ?, TRUE, 'demo')`,
       [eventId, DEMO_MERCHANT_ID, txId, JSON.stringify({ transaction_id: txId }), `${txId}_payment.failed`]
     )
   }

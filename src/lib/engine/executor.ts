@@ -67,8 +67,9 @@ export async function executeRecoveryAction(input: ExecutionInput): Promise<Exec
   // ---- LOG ACTION START ----
   const actionId = uuidv4()
   await execute(
-    `INSERT OR IGNORE INTO recovery_actions (id, attempt_id, action_type, payload, status, idempotency_key)
-     VALUES (?, ?, ?, ?, 'pending', ?)`,
+    `INSERT INTO recovery_actions (id, attempt_id, action_type, payload, status, idempotency_key)
+     VALUES (?, ?, ?, ?, 'pending', ?)
+     ON CONFLICT DO NOTHING`,
     [actionId, input.attemptId, input.action, JSON.stringify({ reason: input.reason }), idempotencyKey]
   )
 
