@@ -1,5 +1,5 @@
 // Dashboard metrics API
-// GET /api/dashboard → aggregated metrics for the main dashboard
+// GET /api/dashboard → canonical aggregated metrics for Dashboard and Analytics
 
 import { NextResponse } from 'next/server'
 import { query } from '@/lib/db/client'
@@ -27,7 +27,7 @@ export async function GET() {
       [merchantId]
     )
 
-    // Recovered
+    // Recovered cases count & total recovered amount
     const recovered = await query<{ total: number; count: number }>(
       `SELECT COALESCE(SUM(actual_recovery), 0) as total, COUNT(*) as count
        FROM recovery_cases
@@ -35,24 +35,31 @@ export async function GET() {
       [merchantId]
     )
 
-    // Total at-risk count
-    const totalFailed = await query<{ count: number }>(
+    // Total recovery cases count
+    const totalCasesQuery = await query<{ count: number }>(
       `SELECT COUNT(*) as count FROM recovery_cases WHERE merchant_id = ?`,
       [merchantId]
     )
 
-    // Actions executed
+    // Open / in-progress cases count
+    const openCases = await query<{ count: number }>(
+      `SELECT COUNT(*) as count FROM recovery_cases
+       WHERE merchant_id = ? AND status IN ('open', 'diagnosing', 'strategy_selected', 'executing', 'recovering')`,
+      [merchantId]
+    )
+
+    // Failed / abandoned cases count
+    const failedCases = await query<{ count: number }>(
+      `SELECT COUNT(*) as count FROM recovery_cases
+       WHERE merchant_id = ? AND status IN ('failed', 'abandoned', 'no_action')`,
+      [merchantId]
+    )
+
+    // Actions executed count
     const actionsExecuted = await query<{ count: number }>(
       `SELECT COUNT(*) as count FROM recovery_attempts ra
        JOIN recovery_cases rc ON ra.case_id = rc.id
        WHERE rc.merchant_id = ?`,
-      [merchantId]
-    )
-
-    // Open cases
-    const openCases = await query<{ count: number }>(
-      `SELECT COUNT(*) as count FROM recovery_cases
-       WHERE merchant_id = ? AND status NOT IN ('recovered', 'failed', 'abandoned', 'no_action')`,
       [merchantId]
     )
 
@@ -113,7 +120,9 @@ export async function GET() {
     const totalRecoverable = recoverable[0]?.total ?? 0
     const totalRecovered = recovered[0]?.total ?? 0
     const recoveredCount = recovered[0]?.count ?? 0
-    const totalCases = totalFailed[0]?.count ?? 0
+    const totalCases = totalCasesQuery[0]?.count ?? 0
+    const openCount = openCases[0]?.count ?? 0
+    const failedCount = failedCases[0]?.count ?? Math.max(0, totalCases - recoveredCount - openCount)
 
     return NextResponse.json({
       metrics: {
@@ -121,9 +130,12 @@ export async function GET() {
         recoverable: totalRecoverable,
         recovered: totalRecovered,
         recovery_rate: totalCases > 0 ? Math.round((recoveredCount / totalCases) * 1000) / 10 : 0,
-        actions_executed: actionsExecuted[0]?.count ?? 0,
-        open_cases: openCases[0]?.count ?? 0,
+        recovered_cases: recoveredCount,
+        open_cases: openCount,
+        in_progress_cases: openCount,
+        failed_cases: failedCount,
         total_cases: totalCases,
+        actions_executed: actionsExecuted[0]?.count ?? 0,
       },
       by_method: byMethod.map((m) => ({
         method: m.payment_method,

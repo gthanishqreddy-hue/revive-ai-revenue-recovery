@@ -116,9 +116,9 @@ export default function AnalyticsPage() {
   // Pie chart: case status distribution
   const metrics = data.metrics as Record<string, number>
   const statusPie = [
-    { name: 'Recovered', value: metrics.total_cases ? Math.round((metrics.recovery_rate / 100) * metrics.total_cases) : 0, color: '#34d399' },
-    { name: 'Failed', value: metrics.total_cases ? Math.round(((100 - metrics.recovery_rate) / 100) * metrics.total_cases * 0.5) : 0, color: '#f87171' },
+    { name: 'Recovered', value: metrics.recovered_cases ?? 0, color: '#34d399' },
     { name: 'In Progress', value: metrics.open_cases ?? 0, color: '#4f8ef7' },
+    { name: 'Failed', value: metrics.failed_cases ?? 0, color: '#f87171' },
   ]
 
   const cardStyle = { background: '#0c1018', border: '1px solid rgba(255,255,255,0.07)' }

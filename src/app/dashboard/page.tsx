@@ -21,6 +21,9 @@ interface DashboardData {
     recovery_rate: number
     actions_executed: number
     open_cases: number
+    in_progress_cases?: number
+    recovered_cases?: number
+    failed_cases?: number
     total_cases: number
   }
   by_method: { method: string; total_cases: number; recovered_cases: number; recovered_amount: number; recovery_rate: number }[]
@@ -169,9 +172,9 @@ export default function DashboardPage() {
   }))
 
   const statusPie = [
-    { name: 'Recovered', value: Math.round((metrics.recovery_rate / 100) * metrics.total_cases), color: '#34d399' },
-    { name: 'In Progress', value: metrics.open_cases, color: '#4f8ef7' },
-    { name: 'Failed', value: Math.max(0, metrics.total_cases - Math.round((metrics.recovery_rate / 100) * metrics.total_cases) - metrics.open_cases), color: '#f87171' },
+    { name: 'Recovered', value: metrics.recovered_cases ?? 0, color: '#34d399' },
+    { name: 'In Progress', value: metrics.open_cases ?? 0, color: '#4f8ef7' },
+    { name: 'Failed', value: metrics.failed_cases ?? 0, color: '#f87171' },
   ]
 
   const METRICS = [
