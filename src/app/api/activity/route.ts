@@ -24,7 +24,7 @@ export async function GET() {
        JOIN recovery_cases rc ON ar.case_id = rc.id
        LEFT JOIN recovery_cases rc2 ON rc2.id = ar.case_id AND rc2.status = 'recovered'
        WHERE rc.merchant_id = ?
-       GROUP BY ar.id
+       GROUP BY ar.id, rc.transaction_id
        ORDER BY ar.created_at DESC LIMIT 30`,
       [DEMO_MERCHANT_ID]
     )

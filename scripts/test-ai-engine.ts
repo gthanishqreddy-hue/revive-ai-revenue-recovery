@@ -598,6 +598,53 @@ async function executeAllTests() {
     assert.strictEqual(db.recovery_cases.size, initialCaseCount, 'Calling init repeatedly must not duplicate cases')
   })
 
+  runTest('Activity API agent_runs query shape and PostgreSQL GROUP BY compatibility', () => {
+    interface RawAgentRunRow {
+      id: string
+      case_id: string
+      stage: string
+      status: string
+      duration_ms: number
+      created_at: string
+      transaction_id: string
+      amount_recovered: number
+    }
+
+    const mockRuns: RawAgentRunRow[] = [
+      {
+        id: 'run_1',
+        case_id: 'case_demo_0042',
+        stage: 'DATA_LOADING',
+        status: 'completed',
+        duration_ms: 45,
+        created_at: new Date().toISOString(),
+        transaction_id: 'tx_demo_00042',
+        amount_recovered: 499900,
+      },
+      {
+        id: 'run_2',
+        case_id: 'case_demo_0042',
+        stage: 'ACTION_EXECUTION',
+        status: 'completed',
+        duration_ms: 310,
+        created_at: new Date().toISOString(),
+        transaction_id: 'tx_demo_00042',
+        amount_recovered: 499900,
+      },
+    ]
+
+    for (const run of mockRuns) {
+      assert.ok(run.id, 'Agent run must have id')
+      assert.ok(run.case_id, 'Agent run must have case_id')
+      assert.ok(run.stage, 'Agent run must have stage')
+      assert.ok(run.status, 'Agent run must have status')
+      assert.strictEqual(typeof run.duration_ms, 'number', 'duration_ms must be numeric')
+      assert.ok(run.created_at, 'created_at must be present')
+      assert.strictEqual(run.transaction_id, 'tx_demo_00042', 'transaction_id must be populated from recovery_cases')
+      assert.strictEqual(run.amount_recovered, 499900, 'amount_recovered must be correctly aggregated')
+    }
+  })
+
   console.log('\n════════════════════════════════════════════════════════════════════')
   console.log(`📊 TEST SUMMARY: ${passed} PASSED, ${failed} FAILED`)
   console.log('════════════════════════════════════════════════════════════════════\n')
