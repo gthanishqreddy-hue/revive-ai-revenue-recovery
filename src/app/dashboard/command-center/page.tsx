@@ -31,6 +31,7 @@ interface ApiResult {
   stages: ApiStage[]
   modelUsed?: string
   aiUsed?: boolean
+  fallbackReason?: string
 }
 
 interface SimResult {
@@ -242,30 +243,64 @@ export default function CommandCenterPage() {
 
         {/* Status badges */}
         <div className="flex items-center gap-3">
-          {/* AI Runtime Availability Badge */}
-          <div
-            className="flex items-center gap-2 px-3 py-1.5 rounded-lg transition-all"
-            style={{
-              background: aiStatus.available ? 'rgba(124,111,232,0.1)' : 'rgba(79,142,247,0.08)',
-              border: `1px solid ${aiStatus.available ? 'rgba(124,111,232,0.3)' : 'rgba(79,142,247,0.2)'}`,
-            }}
-          >
-            {aiStatus.available ? (
-              <>
+          {/* Truthful Dynamic AI Status Badge */}
+          {result ? (
+            result.aiUsed && result.modelUsed === 'gemini-2.5-flash' ? (
+              <div
+                className="flex items-center gap-2 px-3 py-1.5 rounded-lg transition-all"
+                style={{ background: 'rgba(124,111,232,0.12)', border: '1px solid rgba(124,111,232,0.35)' }}
+              >
                 <Sparkles className="w-3.5 h-3.5" style={{ color: '#a78bfa' }} />
                 <span style={{ fontSize: '11px', color: 'rgba(196,181,253,0.95)', fontWeight: 500, letterSpacing: '0.02em' }}>
-                  AI ACTIVE ({aiStatus.modelName})
+                  AI EXECUTED ({result.modelUsed})
                 </span>
-              </>
+              </div>
             ) : (
-              <>
+              <div
+                className="flex items-center gap-2 px-3 py-1.5 rounded-lg transition-all"
+                style={{ background: 'rgba(79,142,247,0.1)', border: '1px solid rgba(79,142,247,0.28)' }}
+              >
                 <Shield className="w-3.5 h-3.5" style={{ color: '#60a5fa' }} />
-                <span style={{ fontSize: '11px', color: 'rgba(147,197,253,0.9)', fontWeight: 500, letterSpacing: '0.02em' }}>
-                  AI FALLBACK (Deterministic Engine)
+                <span style={{ fontSize: '11px', color: 'rgba(147,197,253,0.95)', fontWeight: 500, letterSpacing: '0.02em' }}>
+                  DETERMINISTIC FALLBACK {result.fallbackReason ? `(${result.fallbackReason})` : ''}
                 </span>
-              </>
-            )}
-          </div>
+              </div>
+            )
+          ) : running ? (
+            <div
+              className="flex items-center gap-2 px-3 py-1.5 rounded-lg transition-all"
+              style={{ background: 'rgba(124,111,232,0.1)', border: '1px solid rgba(124,111,232,0.25)' }}
+            >
+              <div className="w-3 h-3 border-2 border-purple-400 border-t-transparent rounded-full animate-spin" />
+              <span style={{ fontSize: '11px', color: 'rgba(196,181,253,0.9)', fontWeight: 500, letterSpacing: '0.02em' }}>
+                AI EVALUATING ({aiStatus.modelName || 'gemini-2.5-flash'})
+              </span>
+            </div>
+          ) : (
+            <div
+              className="flex items-center gap-2 px-3 py-1.5 rounded-lg transition-all"
+              style={{
+                background: aiStatus.available ? 'rgba(124,111,232,0.08)' : 'rgba(79,142,247,0.08)',
+                border: `1px solid ${aiStatus.available ? 'rgba(124,111,232,0.2)' : 'rgba(79,142,247,0.2)'}`,
+              }}
+            >
+              {aiStatus.available ? (
+                <>
+                  <Sparkles className="w-3.5 h-3.5" style={{ color: '#a78bfa' }} />
+                  <span style={{ fontSize: '11px', color: 'rgba(196,181,253,0.9)', fontWeight: 500, letterSpacing: '0.02em' }}>
+                    AI READY ({aiStatus.modelName})
+                  </span>
+                </>
+              ) : (
+                <>
+                  <Shield className="w-3.5 h-3.5" style={{ color: '#60a5fa' }} />
+                  <span style={{ fontSize: '11px', color: 'rgba(147,197,253,0.85)', fontWeight: 500, letterSpacing: '0.02em' }}>
+                    AI DISABLED (Deterministic Engine)
+                  </span>
+                </>
+              )}
+            </div>
+          )}
 
           {/* Demo Mode badge */}
           <div

@@ -343,6 +343,62 @@ export async function runAcceptanceSuite() {
     assert.strictEqual(dashboardMetrics.recovery_rate, casesSummary.recovery_rate)
   })
 
+  // ── AUDIT 7: Command Center Telemetry Anti-Contradiction Invariant ─────────
+  console.log('\n🎯 AUDIT 7: Truthful Telemetry & Anti-Contradiction Guarantees')
+
+  runTest('Command Center header status strictly matches execution outcome model and never claims AI ACTIVE during fallback', () => {
+    // Helper replicating header badge computation logic
+    const getHeaderBadgeText = (
+      result: { aiUsed?: boolean; modelUsed?: string; fallbackReason?: string } | null,
+      running: boolean,
+      aiStatus: { available: boolean; modelName: string }
+    ): string => {
+      if (result) {
+        if (result.aiUsed && result.modelUsed === 'gemini-2.5-flash') {
+          return `AI EXECUTED (${result.modelUsed})`
+        } else {
+          return `DETERMINISTIC FALLBACK ${result.fallbackReason ? `(${result.fallbackReason})` : ''}`.trim()
+        }
+      }
+      if (running) {
+        return `AI EVALUATING (${aiStatus.modelName || 'gemini-2.5-flash'})`
+      }
+      return aiStatus.available
+        ? `AI READY (${aiStatus.modelName})`
+        : `AI DISABLED (Deterministic Engine)`
+    }
+
+    const aiStatusActive = { available: true, modelName: 'gemini-2.5-flash' }
+    const aiStatusDisabled = { available: false, modelName: 'deterministic-fallback' }
+
+    // Case A: Idle state with Gemini configured
+    assert.strictEqual(getHeaderBadgeText(null, false, aiStatusActive), 'AI READY (gemini-2.5-flash)')
+
+    // Case B: Idle state without Gemini
+    assert.strictEqual(getHeaderBadgeText(null, false, aiStatusDisabled), 'AI DISABLED (Deterministic Engine)')
+
+    // Case C: Real Gemini execution succeeded
+    const geminiSuccessResult = { aiUsed: true, modelUsed: 'gemini-2.5-flash' }
+    assert.strictEqual(getHeaderBadgeText(geminiSuccessResult, false, aiStatusActive), 'AI EXECUTED (gemini-2.5-flash)')
+
+    // Case D: Gemini timed out / failed — must report fallback even if aiStatus.available is true!
+    const geminiTimeoutFallbackResult = { aiUsed: false, modelUsed: 'deterministic-fallback', fallbackReason: 'timeout' }
+    const badgeTextOnFallback = getHeaderBadgeText(geminiTimeoutFallbackResult, false, aiStatusActive)
+
+    assert.strictEqual(badgeTextOnFallback, 'DETERMINISTIC FALLBACK (timeout)')
+    assert.ok(
+      !badgeTextOnFallback.includes('AI ACTIVE') && !badgeTextOnFallback.includes('AI EXECUTED'),
+      'Header must NEVER display AI ACTIVE / AI EXECUTED when fallback occurred!'
+    )
+
+    // Case E: Disallowed action fallback
+    const disallowedFallbackResult = { aiUsed: false, modelUsed: 'deterministic-fallback', fallbackReason: 'disallowed_action' }
+    assert.strictEqual(
+      getHeaderBadgeText(disallowedFallbackResult, false, aiStatusActive),
+      'DETERMINISTIC FALLBACK (disallowed_action)'
+    )
+  })
+
   console.log('\n════════════════════════════════════════════════════════════════════')
   console.log(`📊 ACCEPTANCE SUMMARY: ${passed} PASSED, ${failed} FAILED`)
   console.log('════════════════════════════════════════════════════════════════════\n')

@@ -38,6 +38,7 @@ export interface OrchestratorResult {
   stages: PipelineStage[]
   modelUsed?: string
   aiUsed?: boolean
+  fallbackReason?: string
   error?: string
 }
 
@@ -292,7 +293,9 @@ export async function runRecoveryPipeline(
 
   await logAgentRun(caseId, 'strategy', 'completed', Date.now() - stratStart)
 
-  const modelTag = hybridResult.ai_used ? ` [AI: ${hybridResult.model_used}]` : ` [Deterministic]`
+  const modelTag = hybridResult.ai_used
+    ? ` [AI: ${hybridResult.model_used}]`
+    : ` [Fallback: ${hybridResult.fallback_reason || 'deterministic'}]`
   stages.push({
     name: 'Strategy Selection',
     status: 'completed',
@@ -550,6 +553,7 @@ export async function runRecoveryPipeline(
     stages,
     modelUsed: hybridResult.model_used,
     aiUsed: hybridResult.ai_used,
+    fallbackReason: hybridResult.fallback_reason,
   }
 }
 
