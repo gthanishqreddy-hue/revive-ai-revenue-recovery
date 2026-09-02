@@ -159,6 +159,7 @@ export default function CommandCenterPage() {
   const { stages, running, result, error, currentStage, run } = useAnimatedPipeline()
   const [simRunning, setSimRunning] = useState(false)
   const [simResult,  setSimResult]  = useState<SimResult | null>(null)
+  const [simError,   setSimError]   = useState<string | null>(null)
   const [simProgress, setSimProgress] = useState(0)
   const [resetKey, setResetKey] = useState(0)
   const [aiStatus, setAiStatus] = useState<AIRuntimeStatus>({
@@ -184,9 +185,10 @@ export default function CommandCenterPage() {
   const runFullSim = async () => {
     setSimRunning(true)
     setSimResult(null)
+    setSimError(null)
     setSimProgress(0)
 
-    const prog = setInterval(() => setSimProgress(p => Math.min(p + 3, 88)), 180)
+    const prog = setInterval(() => setSimProgress(p => Math.min(p + 4, 88)), 180)
 
     try {
       const res = await fetch('/api/simulation', {
@@ -194,9 +196,27 @@ export default function CommandCenterPage() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({}),
       })
-      const d = await res.json()
-      setSimProgress(100)
-      if (d.summary) setSimResult(d.summary)
+
+      let d: Record<string, unknown> | null = null
+      try {
+        d = await res.json()
+      } catch {
+        throw new Error(`Server returned non-JSON response (${res.status})`)
+      }
+
+      if (!res.ok) {
+        throw new Error(typeof d?.error === 'string' ? d.error : `Simulation failed with status ${res.status}`)
+      }
+
+      if (d?.summary && typeof d.summary === 'object') {
+        setSimProgress(100)
+        setSimResult(d.summary as SimResult)
+      } else {
+        throw new Error(typeof d?.error === 'string' ? d.error : 'Simulation completed but no summary was returned')
+      }
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : 'Simulation failed — network or server error'
+      setSimError(msg)
     } finally {
       clearInterval(prog)
       setSimRunning(false)
@@ -656,31 +676,70 @@ export default function CommandCenterPage() {
               </div>
             )}
 
-            {simResult && (
+            {/* Simulation error state */}
+            {simError && !simRunning && (
               <motion.div
                 initial={{ opacity: 0, y: 8 }}
                 animate={{ opacity: 1, y: 0 }}
                 className="mb-4 rounded-xl p-4"
-                style={{ background: 'rgba(52,211,153,0.04)', border: '1px solid rgba(52,211,153,0.15)' }}
+                style={{ background: 'rgba(248,113,113,0.06)', border: '1px solid rgba(248,113,113,0.25)' }}
               >
-                <p style={{ fontSize: '11px', fontWeight: 500, color: 'rgba(52,211,153,0.7)', marginBottom: 10, letterSpacing: '0.04em' }}>
-                  SIMULATION COMPLETE
+                <div className="flex items-center gap-2 mb-2">
+                  <XCircle className="w-4 h-4" style={{ color: '#f87171' }} />
+                  <span style={{ fontSize: '12px', fontWeight: 600, color: '#f87171' }}>
+                    Simulation Failed
+                  </span>
+                </div>
+                <p style={{ fontSize: '11px', fontFamily: 'var(--font-mono)', color: 'rgba(248,113,113,0.85)', lineHeight: 1.5 }}>
+                  {simError}
                 </p>
+              </motion.div>
+            )}
+
+            {/* Simulation success result card */}
+            {simResult && !simRunning && (
+              <motion.div
+                initial={{ opacity: 0, y: 8 }}
+                animate={{ opacity: 1, y: 0 }}
+                className="mb-4 rounded-xl p-4"
+                style={{ background: 'rgba(52,211,153,0.05)', border: '1px solid rgba(52,211,153,0.2)' }}
+              >
+                <div className="flex items-center justify-between mb-3">
+                  <div className="flex items-center gap-2">
+                    <CheckCircle className="w-4 h-4" style={{ color: '#34d399' }} />
+                    <span style={{ fontSize: '11px', fontWeight: 600, color: '#34d399', letterSpacing: '0.04em' }}>
+                      FULL SIMULATION COMPLETE
+                    </span>
+                  </div>
+                  <span
+                    className="mono"
+                    style={{
+                      fontSize: '10px',
+                      padding: '2px 6px',
+                      borderRadius: '4px',
+                      background: 'rgba(52,211,153,0.12)',
+                      color: '#6ee7b7',
+                      border: '1px solid rgba(52,211,153,0.25)',
+                    }}
+                  >
+                    {simResult.processed} cases
+                  </span>
+                </div>
                 {[
-                  { label: 'Cases processed', value: simResult.processed.toLocaleString('en-IN') },
-                  { label: 'Successful',       value: simResult.recovered.toLocaleString('en-IN'), color: '#34d399' },
-                  { label: 'Failed',            value: simResult.failed.toLocaleString('en-IN'), color: '#f87171' },
-                  { label: 'Revenue recovered', value: `₹${(simResult.total_recovered / 100).toLocaleString('en-IN')}`, color: '#34d399', large: true },
-                  { label: 'Recovery rate',     value: `${simResult.recovery_rate}%`, color: '#4f8ef7' },
+                  { label: 'Processed',        value: simResult.processed.toLocaleString('en-IN') },
+                  { label: 'Recovered',        value: simResult.recovered.toLocaleString('en-IN'), color: '#34d399' },
+                  { label: 'Failed',           value: simResult.failed.toLocaleString('en-IN'), color: '#f87171' },
+                  { label: 'Recovery Rate',    value: `${simResult.recovery_rate}%`, color: '#4f8ef7' },
+                  { label: 'Revenue Recovered', value: `₹${Math.floor(simResult.total_recovered / 100).toLocaleString('en-IN')}`, color: '#34d399', large: true },
                 ].map(({ label, value, color, large }) => (
                   <div key={label} className="flex justify-between items-center mb-1.5">
-                    <span style={{ fontSize: '11px', color: 'rgba(74,85,104,0.6)' }}>{label}</span>
+                    <span style={{ fontSize: '11px', color: 'rgba(136,146,164,0.7)' }}>{label}:</span>
                     <span
                       className="mono"
                       style={{
                         fontSize: large ? '1.1rem' : '12px',
                         fontWeight: large ? 600 : 500,
-                        color: color ?? 'rgba(240,244,255,0.6)',
+                        color: color ?? 'rgba(240,244,255,0.85)',
                         letterSpacing: large ? '-0.02em' : '0',
                       }}
                     >

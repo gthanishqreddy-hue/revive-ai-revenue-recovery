@@ -83,11 +83,12 @@ export async function POST(req: Request) {
       return NextResponse.json({ success: true, result })
     }
 
-    // Full batch simulation — process up to 50 pending cases
+    // Full batch simulation — process up to 5 pending cases per invocation
+    // Bounded to 5 cases so all Gemini pipeline executions finish safely within Vercel serverless function limits
     const pendingCases = await query<{ id: string; transaction_id: string }>(
       `SELECT rc.id, rc.transaction_id FROM recovery_cases rc
        WHERE rc.merchant_id = ? AND rc.status IN ('open', 'diagnosing', 'strategy_selected')
-       LIMIT 50`,
+       LIMIT 5`,
       [merchantId]
     )
 
@@ -96,7 +97,7 @@ export async function POST(req: Request) {
       const resetable = await query<{ id: string }>(
         `SELECT id FROM recovery_cases
          WHERE merchant_id = ? AND status = 'failed'
-         LIMIT 30`,
+         LIMIT 5`,
         [merchantId]
       )
       for (const c of resetable) {
@@ -112,7 +113,7 @@ export async function POST(req: Request) {
     const toProcess = await query<{ id: string; transaction_id: string }>(
       `SELECT rc.id, rc.transaction_id FROM recovery_cases rc
        WHERE rc.merchant_id = ? AND rc.status IN ('open', 'diagnosing', 'strategy_selected')
-       LIMIT 50`,
+       LIMIT 5`,
       [merchantId]
     )
 
