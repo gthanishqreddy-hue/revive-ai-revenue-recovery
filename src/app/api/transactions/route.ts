@@ -32,8 +32,7 @@ export async function GET() {
        LEFT JOIN customers c ON t.customer_id = c.id
        LEFT JOIN recovery_cases rc ON t.id = rc.transaction_id
        WHERE t.merchant_id = ? AND t.status = 'failed'
-       ORDER BY t.created_at DESC
-       LIMIT 200`,
+       ORDER BY t.created_at DESC`,
       [merchantId]
     )
 
