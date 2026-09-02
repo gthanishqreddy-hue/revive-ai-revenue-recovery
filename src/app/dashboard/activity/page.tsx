@@ -2,8 +2,9 @@
 
 import { useEffect, useState, useCallback } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
-import { Activity, RefreshCw, Zap, Shield, CheckCircle, AlertCircle, Clock } from 'lucide-react'
-import { formatDateTime } from '@/lib/utils'
+import { Activity, RefreshCw, Zap, Shield, CheckCircle, AlertCircle, Clock, ExternalLink } from 'lucide-react'
+import Link from 'next/link'
+import { formatDateTime, formatINR } from '@/lib/utils'
 
 interface ActivityItem {
   id: string
@@ -11,6 +12,7 @@ interface ActivityItem {
   event: string
   severity: string
   created_at: string
+  details?: string
 }
 
 interface AgentRun {
@@ -20,6 +22,8 @@ interface AgentRun {
   status: string
   duration_ms: number
   created_at: string
+  transaction_id?: string
+  amount_recovered?: number
 }
 
 const STAGE_ICONS: Record<string, React.ElementType> = {
@@ -56,21 +60,31 @@ export default function ActivityPage() {
   const [activity, setActivity] = useState<ActivityItem[]>([])
   const [agentRuns, setAgentRuns] = useState<AgentRun[]>([])
   const [loading, setLoading] = useState(true)
+  const [error, setError] = useState<string | null>(null)
   const [autoRefresh, setAutoRefresh] = useState(true)
 
   const fetchData = useCallback(async () => {
     try {
+      setError(null)
       const res = await fetch('/api/activity')
+      if (!res.ok) {
+        throw new Error(`Failed to load activity (${res.status})`)
+      }
       const data = await res.json()
       setActivity(data.activity ?? [])
       setAgentRuns(data.agent_runs ?? [])
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Error loading activity feed')
     } finally {
       setLoading(false)
     }
   }, [])
 
   useEffect(() => {
-    fetchData()
+    const init = async () => {
+      await fetchData()
+    }
+    init()
     const interval = autoRefresh ? setInterval(fetchData, 10000) : null
     return () => { if (interval) clearInterval(interval) }
   }, [autoRefresh, fetchData])
@@ -80,7 +94,7 @@ export default function ActivityPage() {
   return (
     <div className="p-6 space-y-5">
       {/* Header */}
-      <div className="flex items-center justify-between">
+      <div className="flex items-center justify-between flex-wrap gap-4">
         <div>
           <h1
             style={{ fontSize: '1.25rem', fontWeight: 600, letterSpacing: '-0.015em', color: 'rgba(240,244,255,0.9)', display: 'flex', alignItems: 'center', gap: 8 }}
@@ -115,6 +129,25 @@ export default function ActivityPage() {
           </button>
         </div>
       </div>
+
+      {error && (
+        <div
+          className="rounded-xl p-4 flex items-center justify-between"
+          style={{ background: 'rgba(248,113,113,0.08)', border: '1px solid rgba(248,113,113,0.25)', color: '#f87171' }}
+        >
+          <div className="flex items-center gap-2">
+            <AlertCircle className="w-4 h-4 shrink-0" />
+            <span style={{ fontSize: '13px' }}>{error}</span>
+          </div>
+          <button
+            onClick={fetchData}
+            className="px-3 py-1 rounded text-xs"
+            style={{ background: 'rgba(248,113,113,0.15)', border: '1px solid rgba(248,113,113,0.3)', color: '#f87171', cursor: 'pointer' }}
+          >
+            Retry
+          </button>
+        </div>
+      )}
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
         {/* Audit Log */}
@@ -226,6 +259,8 @@ export default function ActivityPage() {
                   {agentRuns.map((run, i) => {
                     const Icon = STAGE_ICONS[run.stage] ?? Activity
                     const cfg = RUN_CFG[run.status] ?? RUN_CFG.running
+                    const isRecovered = typeof run.amount_recovered === 'number' && run.amount_recovered > 0
+
                     return (
                       <motion.div
                         key={run.id}
@@ -245,23 +280,44 @@ export default function ActivityPage() {
                         </div>
 
                         <div className="flex-1 min-w-0">
-                          <div className="flex items-center justify-between">
+                          <div className="flex items-center justify-between flex-wrap gap-1">
                             <span style={{ fontSize: '13px', color: 'rgba(240,244,255,0.78)', fontWeight: 500, textTransform: 'capitalize' }}>
                               {run.stage.replace(/_/g, ' ')} stage
                             </span>
-                            {run.duration_ms && (
-                              <span className="mono" style={{ fontSize: '10px', color: 'rgba(74,85,104,0.5)' }}>
-                                {run.duration_ms}ms
-                              </span>
-                            )}
+                            <div className="flex items-center gap-2">
+                              {isRecovered && (
+                                <span
+                                  className="mono text-[10px] px-1.5 py-0.5 rounded"
+                                  style={{ background: 'rgba(52,211,153,0.12)', color: '#34d399', border: '1px solid rgba(52,211,153,0.25)' }}
+                                >
+                                  +{formatINR(run.amount_recovered as number)}
+                                </span>
+                              )}
+                              {run.duration_ms && (
+                                <span className="mono" style={{ fontSize: '10px', color: 'rgba(74,85,104,0.5)' }}>
+                                  {run.duration_ms}ms
+                                </span>
+                              )}
+                            </div>
                           </div>
-                          <div className="mono truncate" style={{ fontSize: '10px', color: 'rgba(74,85,104,0.45)', marginTop: 2 }}>
-                            case:{run.case_id?.slice(0, 22)}…
+                          <div className="flex items-center gap-2 mt-1">
+                            <Link
+                              href={`/dashboard/cases/${run.case_id}`}
+                              className="mono truncate inline-flex items-center gap-1 hover:text-blue-400 transition-colors"
+                              style={{ fontSize: '10px', color: 'rgba(74,85,104,0.7)' }}
+                            >
+                              <span>{run.transaction_id ?? `case:${run.case_id?.slice(0, 16)}`}</span>
+                              <ExternalLink className="w-2.5 h-2.5 opacity-60" />
+                            </Link>
+                            <span style={{ fontSize: '10px', color: 'rgba(74,85,104,0.4)' }}>·</span>
+                            <span className="mono" style={{ fontSize: '10px', color: 'rgba(74,85,104,0.5)' }}>
+                              {formatDateTime(run.created_at)}
+                            </span>
                           </div>
                         </div>
 
                         <span
-                          className="px-2 py-0.5 rounded text-xs font-medium"
+                          className="px-2 py-0.5 rounded text-xs font-medium shrink-0"
                           style={{ color: cfg.color, background: cfg.bg, border: `1px solid ${cfg.border}`, letterSpacing: '0.04em' }}
                         >
                           {run.status}

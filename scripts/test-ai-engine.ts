@@ -6,8 +6,8 @@ import { z } from 'zod'
 import { AIDecisionSchema, type RecoveryAIContext } from '../src/lib/ai/types'
 import { evaluateStrategyWithAI, setAIProvider } from '../src/lib/ai'
 import type { AIProvider } from '../src/lib/ai/provider'
-import type { StrategySelectionResult, StrategyEvaluation, RecoveryAction } from '../src/lib/types'
-import { getPaymentProvider, setPaymentProvider, DemoPaymentProvider, RazorpayProvider } from '../src/lib/payment'
+import type { StrategySelectionResult, RecoveryAction } from '../src/lib/types'
+import { getPaymentProvider, setPaymentProvider, RazorpayProvider } from '../src/lib/payment'
 import { checkRateLimit, resetRateLimitStore } from '../src/lib/rate-limit'
 
 console.log('════════════════════════════════════════════════════════════════════')
@@ -134,7 +134,7 @@ const PolicyUpdateSchema = z.object({
   auto_abandon_after_hours: z.number().int().min(1).max(720),
 }).strict()
 
-async function executeAllTests() {
+export async function executeAllTests() {
   // ── SECTION 1: ZOD SCHEMA VALIDATION FOR AI DECISIONS ─────────────────────
   console.log('📦 SECTION 1: Zod Schema Validation for Structured AI Decisions')
 
@@ -649,9 +649,11 @@ async function executeAllTests() {
   console.log(`📊 TEST SUMMARY: ${passed} PASSED, ${failed} FAILED`)
   console.log('════════════════════════════════════════════════════════════════════\n')
 
-  if (failed > 0) {
-    process.exit(1)
-  }
+  return { passed, failed }
 }
 
-executeAllTests()
+if (process.argv[1]?.endsWith('test-ai-engine.ts')) {
+  executeAllTests().then(({ failed }) => {
+    if (failed > 0) process.exit(1)
+  })
+}

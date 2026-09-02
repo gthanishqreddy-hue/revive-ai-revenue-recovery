@@ -9,7 +9,7 @@ import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
   PieChart, Pie, Cell
 } from 'recharts'
-import { formatINR, formatINRCompact, formatPercent, CATEGORY_LABELS, ACTION_LABELS, METHOD_LABELS } from '@/lib/utils'
+import { formatINR, formatINRCompact, formatPercent, CATEGORY_LABELS, METHOD_LABELS } from '@/lib/utils'
 import { AnimatedNumber } from '@/components/ui/AnimatedNumber'
 import { staggerContainer, fadeUp } from '@/lib/motion'
 
@@ -184,7 +184,6 @@ export default function DashboardPage() {
   ]
 
   const axisStyle = { fill: 'rgba(74,85,104,0.7)', fontSize: 10 }
-  const gridStyle = { stroke: 'rgba(255,255,255,0.05)' }
 
   return (
     <div className="p-6 space-y-6">

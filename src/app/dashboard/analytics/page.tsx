@@ -4,9 +4,9 @@ import { useEffect, useState } from 'react'
 import { motion } from 'framer-motion'
 import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
-  PieChart, Pie, Cell, AreaChart, Area, Legend
+  PieChart, Pie, Cell, Legend
 } from 'recharts'
-import { BarChart3, RefreshCw } from 'lucide-react'
+import { BarChart3, RefreshCw, AlertCircle } from 'lucide-react'
 import { formatINR, formatINRCompact, CATEGORY_LABELS, ACTION_LABELS, METHOD_LABELS } from '@/lib/utils'
 
 const COLORS = ['#4f8ef7', '#7c6fe8', '#34d399', '#f59e0b', '#f87171', '#22d3ee']
@@ -30,13 +30,23 @@ const CustomTooltip = ({ active, payload, label }: { active?: boolean; payload?:
 export default function AnalyticsPage() {
   const [data, setData] = useState<Record<string, unknown> | null>(null)
   const [loading, setLoading] = useState(true)
+  const [error, setError] = useState<string | null>(null)
 
   const fetchData = async () => {
     setLoading(true)
-    const res = await fetch('/api/dashboard')
-    const json = await res.json()
-    setData(json)
-    setLoading(false)
+    setError(null)
+    try {
+      const res = await fetch('/api/dashboard')
+      if (!res.ok) {
+        throw new Error(`Failed to load analytics (${res.status})`)
+      }
+      const json = await res.json()
+      setData(json)
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Error loading analytics')
+    } finally {
+      setLoading(false)
+    }
   }
 
   useEffect(() => {
@@ -50,6 +60,29 @@ export default function AnalyticsPage() {
         <div className="h-8 w-48 shimmer rounded-lg" />
         <div className="grid grid-cols-2 gap-6">
           {Array.from({ length: 4 }).map((_, i) => <div key={i} className="h-64 shimmer rounded-xl" />)}
+        </div>
+      </div>
+    )
+  }
+
+  if (error || (!data && !loading)) {
+    return (
+      <div className="p-6 space-y-4">
+        <div
+          className="rounded-xl p-4 flex items-center justify-between"
+          style={{ background: 'rgba(248,113,113,0.08)', border: '1px solid rgba(248,113,113,0.25)', color: '#f87171' }}
+        >
+          <div className="flex items-center gap-2">
+            <AlertCircle className="w-4 h-4 shrink-0" />
+            <span style={{ fontSize: '13px' }}>{error ?? 'Analytics data unavailable'}</span>
+          </div>
+          <button
+            onClick={fetchData}
+            className="px-3 py-1 rounded text-xs"
+            style={{ background: 'rgba(248,113,113,0.15)', border: '1px solid rgba(248,113,113,0.3)', color: '#f87171', cursor: 'pointer' }}
+          >
+            Retry
+          </button>
         </div>
       </div>
     )

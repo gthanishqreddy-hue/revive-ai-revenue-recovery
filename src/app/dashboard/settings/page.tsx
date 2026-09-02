@@ -83,18 +83,18 @@ export default function SettingsPage() {
         {/* Database */}
         <motion.div variants={fadeUp}>
           <Section icon={Database} title="Database" color="#4f8ef7">
-            <Row label="Engine" value="SQLite via @libsql/client" mono />
-            <Row label="Location" value="System temp directory" />
-            <Row label="Production path" value="Turso / Supabase PostgreSQL" />
+            <Row label="Engine" value="PostgreSQL via @neondatabase/serverless" mono />
+            <Row label="Location" value="Neon Serverless PostgreSQL (Cloud)" />
+            <Row label="Driver" value="Serverless HTTP Driver" />
             <Row label="Schema" value="14 tables" mono />
-            <Row label="Migration path" value="Zero schema changes needed" valueColor="#34d399" />
+            <Row label="Idempotency" value="ON CONFLICT constraints enforced" valueColor="#34d399" />
           </Section>
         </motion.div>
 
         {/* AI Engine */}
         <motion.div variants={fadeUp}>
           <Section icon={Zap} title="AI Engine" color="#7c6fe8">
-            <Row label="Primary model" value={process.env.NEXT_PUBLIC_GEMINI_MODEL ?? 'gemini-1.5-flash'} mono />
+            <Row label="Primary model" value="gemini-2.5-flash" mono />
             <Row label="Fallback" value="Deterministic ERV Optimizer" />
             <Row label="API key" value={process.env.GEMINI_API_KEY ? '✓ Configured' : 'Not set — using fallback'} valueColor={process.env.GEMINI_API_KEY ? '#34d399' : '#f59e0b'} />
             <Row label="Structured output" value="Zod schema validated" valueColor="#34d399" />
@@ -145,8 +145,9 @@ export default function SettingsPage() {
           style={{ background: '#060a0f', border: '1px solid rgba(255,255,255,0.05)', fontFamily: 'var(--font-mono)', fontSize: '11px' }}
         >
           {[
-            { key: 'GEMINI_API_KEY', desc: 'Google AI API key — optional, fallback runs without it', required: false },
-            { key: 'DATABASE_DIR', desc: 'Directory for SQLite file (default: OS temp)', required: false },
+            { key: 'DATABASE_URL', desc: 'Neon PostgreSQL connection string', required: true },
+            { key: 'GEMINI_API_KEY', desc: 'Google AI API key — optional, deterministic fallback runs without it', required: false },
+            { key: 'GEMINI_MODEL', desc: 'Gemini model name (default: gemini-2.5-flash)', required: false },
             { key: 'RAZORPAY_WEBHOOK_SECRET', desc: 'Webhook signing secret for signature verification', required: false },
             { key: 'RAZORPAY_KEY_ID', desc: 'Payment provider key — used for Payment Links API', required: false },
             { key: 'RAZORPAY_KEY_SECRET', desc: 'Payment provider secret', required: false },

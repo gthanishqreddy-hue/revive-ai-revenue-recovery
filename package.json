@@ -7,7 +7,7 @@
     "build": "next build",
     "start": "next start",
     "lint": "eslint",
-    "test": "tsx scripts/test-ai-engine.ts"
+    "test": "tsx scripts/test-all.ts"
   },
   "dependencies": {
     "@google/genai": "^2.20.0",

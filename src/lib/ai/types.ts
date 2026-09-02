@@ -2,7 +2,7 @@
 // For REVIVE Autonomous AI Revenue Recovery
 
 import { z } from 'zod'
-import type { FailureCategory, PaymentMethod, RecoveryAction, StrategyEvaluation } from '../types'
+import type { FailureCategory, PaymentMethod, RecoveryAction } from '../types'
 
 // ── Context sent to AI (sanitized — NO sensitive credentials or PII) ────────
 

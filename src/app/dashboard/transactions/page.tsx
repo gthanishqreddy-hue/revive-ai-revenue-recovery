@@ -339,7 +339,6 @@ export default function TransactionsPage() {
           <div style={{ background: '#080c12' }}>
             <AnimatePresence mode="popLayout">
               {filtered.map((row, i) => {
-                const statusCfg = STATUS_CONFIG[row.case_status] ?? STATUS_CONFIG.open
                 return (
                   <motion.div
                     key={row.tx_id}
