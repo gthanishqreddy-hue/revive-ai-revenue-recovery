@@ -24,12 +24,14 @@ export class GeminiAIProvider implements AIProvider {
     const start = Date.now()
 
     if (!this.isAvailable()) {
+      const latencyMs = Date.now() - start
+      console.warn(`[AI] Gemini fallback | reason=not_configured | model=${this.modelName} | latency_ms=${latencyMs}`)
       return {
         success: false,
         modelUsed: 'deterministic-fallback',
         error: 'GEMINI_API_KEY not configured',
-        latencyMs: Date.now() - start,
-        fallbackReason: 'API key not configured',
+        latencyMs,
+        fallbackReason: 'not_configured',
       }
     }
 
@@ -38,9 +40,9 @@ export class GeminiAIProvider implements AIProvider {
 
       const prompt = this.buildPrompt(context)
 
-      // 6-second timeout race
+      // 9-second timeout race (optimized for Vercel Serverless Function runtime)
       const timeoutPromise = new Promise<never>((_, reject) =>
-        setTimeout(() => reject(new Error('Gemini API call timed out after 6000ms')), 6000)
+        setTimeout(() => reject(new Error('Gemini API call timed out after 9000ms')), 9000)
       )
 
       const generatePromise = client.models.generateContent({
@@ -59,10 +61,10 @@ CRITICAL CONSTRAINTS:
 {
   "recommended_action": "RETRY_PAYMENT" | "GENERATE_PAYMENT_LINK" | "SEND_WHATSAPP" | "SEND_EMAIL" | "VOICE_CALL" | "WAIT_AND_RETRY" | "NO_ACTION" | "ESCALATE_TO_HUMAN",
   "confidence": number between 0.0 and 1.0,
-  "reason_codes": ["SHORT_REASON_CODE_1", "SHORT_REASON_CODE_2", ...],
+  "reason_codes": ["SHORT_REASON_CODE_1", "SHORT_REASON_CODE_2"],
   "reasoning": "Clear 1-2 sentence explanation of why this action was selected over alternatives."
 }
-3. Do NOT include markdown code fences or backticks. Return pure JSON.`,
+3. Return pure compact JSON without markdown backticks.`,
         },
       })
 
@@ -71,12 +73,13 @@ CRITICAL CONSTRAINTS:
 
       const rawText = response.text?.trim() ?? ''
       if (!rawText) {
+        console.warn(`[AI] Gemini fallback | reason=empty_response | model=${this.modelName} | latency_ms=${latencyMs}`)
         return {
           success: false,
           modelUsed: 'deterministic-fallback',
           error: 'Empty response from Gemini API',
           latencyMs,
-          fallbackReason: 'Empty response',
+          fallbackReason: 'empty_response',
         }
       }
 
@@ -87,13 +90,14 @@ CRITICAL CONSTRAINTS:
         const cleaned = rawText.replace(/^```json\s*/i, '').replace(/^```\s*/, '').replace(/```$/, '').trim()
         parsedJson = JSON.parse(cleaned)
       } catch (parseErr) {
+        console.warn(`[AI] Gemini fallback | reason=malformed_json | model=${this.modelName} | latency_ms=${latencyMs}`)
         return {
           success: false,
           modelUsed: 'deterministic-fallback',
           rawResponse: rawText,
           error: `Failed to parse AI JSON output: ${parseErr instanceof Error ? parseErr.message : String(parseErr)}`,
           latencyMs,
-          fallbackReason: 'Malformed JSON output',
+          fallbackReason: 'malformed_json',
         }
       }
 
@@ -101,15 +105,18 @@ CRITICAL CONSTRAINTS:
       const validation = AIDecisionSchema.safeParse(parsedJson)
       if (!validation.success) {
         const errorDetails = validation.error.issues.map(i => `${i.path.join('.')}: ${i.message}`).join('; ')
+        console.warn(`[AI] Gemini fallback | reason=schema_validation_failed | model=${this.modelName} | latency_ms=${latencyMs} | details=${errorDetails}`)
         return {
           success: false,
           modelUsed: 'deterministic-fallback',
           rawResponse: rawText,
           error: `AI response schema validation failed: ${errorDetails}`,
           latencyMs,
-          fallbackReason: `Schema validation failed (${errorDetails})`,
+          fallbackReason: 'schema_validation_failed',
         }
       }
+
+      console.log(`[AI] Gemini analysis complete | model=${this.modelName} | action=${validation.data.recommended_action} | latency_ms=${latencyMs}`)
 
       return {
         success: true,
@@ -121,56 +128,61 @@ CRITICAL CONSTRAINTS:
     } catch (err) {
       const latencyMs = Date.now() - start
       const errorMsg = err instanceof Error ? err.message : 'Unknown Gemini error'
+      const isTimeout = errorMsg.includes('timed out')
+      const reason = isTimeout ? 'timeout' : 'api_error'
+
+      console.warn(`[AI] Gemini fallback | reason=${reason} | model=${this.modelName} | latency_ms=${latencyMs} | error=${errorMsg}`)
+
       return {
         success: false,
         modelUsed: 'deterministic-fallback',
         error: errorMsg,
         latencyMs,
-        fallbackReason: errorMsg,
+        fallbackReason: reason,
       }
     }
   }
 
   private buildPrompt(context: RecoveryAIContext): string {
     return JSON.stringify({
-      task: 'Evaluate recovery strategies for failed payment event and select optimal action',
-      transaction: {
+      task: 'select_optimal_recovery_action',
+      tx: {
         id: context.transactionId,
         amount_rupees: Math.floor(context.amountPaise / 100),
         currency: context.currency,
-        payment_method: context.paymentMethod,
+        method: context.paymentMethod,
         failure_code: context.failureCode,
       },
-      diagnosis: {
+      diag: {
         category: context.failureCategory,
         reason: context.diagnosisReason,
-        recoverability_score: context.recoverabilityScore,
-        is_permanent_failure: context.isPermanentFailure,
+        recoverability: context.recoverabilityScore,
+        is_perm: context.isPermanentFailure,
       },
-      customer_signals: {
-        intent_score_100: context.customerIntentScore,
-        intent_confidence: context.customerIntentConfidence,
-        is_high_value: context.isHighValueCustomer,
+      customer: {
+        intent: context.customerIntentScore,
+        confidence: context.customerIntentConfidence,
+        high_value: context.isHighValueCustomer,
         total_payments: context.customerTotalPayments,
         successful_payments: context.customerSuccessfulPayments,
-        behavioral_signals: context.customerSignalsSummary,
+        signals: context.customerSignalsSummary,
       },
       history: {
-        previous_recovery_attempts_count: context.previousAttemptsCount,
-        previous_strategies_used: context.previousStrategies,
+        attempts: context.previousAttemptsCount,
+        strategies: context.previousStrategies,
       },
-      candidate_strategies_with_deterministic_erv: context.candidateStrategies.map(s => ({
+      candidate_strategies: context.candidateStrategies.map(s => ({
         action: s.action,
-        success_probability_pct: Math.round(s.probabilityOfSuccess * 100),
-        expected_recovery_value_rupees: Math.floor(s.expectedRecoveryValuePaise / 100),
-        action_cost_rupees: Math.floor(s.actionCostPaise / 100),
-        customer_friction_penalty: s.customerFrictionPenalty,
-        baseline_reasoning: s.reasoning,
+        success_prob_pct: Math.round(s.probabilityOfSuccess * 100),
+        erv_rupees: Math.floor(s.expectedRecoveryValuePaise / 100),
+        cost_rupees: Math.floor(s.actionCostPaise / 100),
+        friction: s.customerFrictionPenalty,
+        reasoning: s.reasoning,
       })),
-      policy_constraints: {
+      policy: {
         max_retries: context.policyMaxRetries,
         allowed_channels: context.policyAllowedChannels,
       },
-    }, null, 2)
+    })
   }
 }

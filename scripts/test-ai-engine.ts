@@ -240,6 +240,66 @@ async function executeAllTests() {
     assert.strictEqual(result.selected.expected_recovery_value, 389900)
   })
 
+  await runTest('When AI provider times out (>9000ms), engine falls back cleanly to deterministic fallback', async () => {
+    const timeoutProvider: AIProvider = {
+      name: 'Timing Out Provider',
+      modelName: 'gemini-2.5-flash',
+      isAvailable: () => true,
+      analyzeRecoveryCase: async () => ({
+        success: false,
+        modelUsed: 'deterministic-fallback',
+        error: 'Gemini API call timed out after 9000ms',
+        latencyMs: 9005,
+        fallbackReason: 'timeout',
+      }),
+    }
+
+    setAIProvider(timeoutProvider)
+
+    const result = await evaluateStrategyWithAI(
+      mockContext,
+      mockDeterministicResult,
+      mockContext.policyAllowedChannels
+    )
+
+    assert.strictEqual(result.ai_used, false)
+    assert.strictEqual(result.model_used, 'deterministic-fallback')
+    assert.strictEqual(result.fallback_reason, 'timeout')
+    assert.strictEqual(result.selected.action, 'WAIT_AND_RETRY')
+  })
+
+  await runTest('When AI recommends an action with no valid ERV calculation, engine falls back safely', async () => {
+    const unverifiedActionProvider: AIProvider = {
+      name: 'Mock Provider',
+      modelName: 'gemini-2.5-flash',
+      isAvailable: () => true,
+      analyzeRecoveryCase: async () => ({
+        success: true,
+        decision: {
+          recommended_action: 'SEND_WHATSAPP',
+          confidence: 0.9,
+          reason_codes: ['WHATSAPP_NUDGE'],
+          reasoning: 'Send WhatsApp nudge.',
+        },
+        modelUsed: 'gemini-2.5-flash',
+        latencyMs: 250,
+      }),
+    }
+
+    setAIProvider(unverifiedActionProvider)
+
+    const result = await evaluateStrategyWithAI(
+      mockContext,
+      mockDeterministicResult,
+      ['WAIT_AND_RETRY', 'GENERATE_PAYMENT_LINK', 'SEND_WHATSAPP']
+    )
+
+    assert.strictEqual(result.ai_used, false)
+    assert.strictEqual(result.model_used, 'deterministic-fallback')
+    assert.ok(result.fallback_reason?.includes('unverified action'))
+    assert.strictEqual(result.selected.action, 'WAIT_AND_RETRY')
+  })
+
   // ── SECTION 3: FINANCIAL SAFETY ENFORCEMENT ────────────────────────────────
   console.log('\n🔒 SECTION 3: Financial Safety Boundary Enforcement')
 
