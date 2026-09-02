@@ -18,7 +18,7 @@ const DEMO_MERCHANT_EMAIL = 'demo@revive.ai'
 
 // Indian names for realistic demo data
 const CUSTOMER_NAMES = [
-  'Rohit Sharma', 'Priya Patel', 'Amit Kumar', 'Sneha Reddy', 'Vikram Singh',
+  'Priya Sharma', 'Rohit Sharma', 'Priya Patel', 'Amit Kumar', 'Sneha Reddy', 'Vikram Singh',
   'Ananya Iyer', 'Rahul Gupta', 'Pooja Nair', 'Karthik Menon', 'Neha Joshi',
   'Arjun Mehta', 'Divya Krishnan', 'Suresh Yadav', 'Meena Pillai', 'Rajesh Shah',
   'Sunita Verma', 'Aakash Tiwari', 'Lakshmi Bhat', 'Manish Agarwal', 'Kavita Soni',
@@ -60,30 +60,29 @@ function hoursAgo(hours: number): string {
   return d.toISOString()
 }
 
-export async function seedDemoData(): Promise<void> {
-  // Check if already seeded
-  const existing = await query<{ count: number }>(
-    'SELECT COUNT(*) as count FROM merchants WHERE id = ?',
-    [DEMO_MERCHANT_ID]
-  )
-  if (existing[0]?.count > 0) {
-    console.log('[seed] Demo data already exists, skipping.')
-    return
-  }
+/**
+ * Ensures the canonical demo transaction (tx_demo_00042) and all its required
+ * dependencies (merchant, policy, Priya Sharma customer record, open recovery case)
+ * exist idempotently in the database.
+ */
+export async function ensureCanonicalDemoData(): Promise<void> {
+  const now = new Date().toISOString()
+  const created = hoursAgo(2)
 
-  console.log('[seed] Seeding demo data...')
-
-  // 1. Create demo merchant
+  // 1. Demo Merchant
   await execute(
-    `INSERT INTO merchants (id, name, email, api_key, is_demo) VALUES (?, ?, ?, ?, ?)`,
-    [DEMO_MERCHANT_ID, 'Acme Commerce (Demo)', DEMO_MERCHANT_EMAIL, 'rzp_test_demo_key', true]
+    `INSERT INTO merchants (id, name, email, api_key, is_demo)
+     VALUES (?, ?, ?, ?, TRUE)
+     ON CONFLICT (id) DO UPDATE SET name = EXCLUDED.name, is_demo = TRUE`,
+    [DEMO_MERCHANT_ID, 'Acme Commerce (Demo)', DEMO_MERCHANT_EMAIL, 'rzp_test_demo_key']
   )
 
-  // 2. Create merchant policy
+  // 2. Merchant Policy
   await execute(
     `INSERT INTO policies (id, merchant_id, max_retries, min_retry_interval_mins, max_notifications_per_day,
      min_recovery_amount_paise, allowed_channels, human_approval_threshold, max_recovery_cost_paise, auto_abandon_after_hours)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+     ON CONFLICT (merchant_id) DO NOTHING`,
     [
       uuidv4(), DEMO_MERCHANT_ID, 2, 15, 2, 10000,
       JSON.stringify(['RETRY_PAYMENT', 'SEND_EMAIL', 'GENERATE_PAYMENT_LINK', 'WAIT_AND_RETRY', 'SEND_WHATSAPP']),
@@ -91,10 +90,112 @@ export async function seedDemoData(): Promise<void> {
     ]
   )
 
-  // 3. Create 25 customers
-  const customerIds: string[] = []
+  // 3. Canonical Customer: Priya Sharma
+  const customerId = 'customer_demo_042'
+  await execute(
+    `INSERT INTO customers (id, merchant_id, name, email, phone, total_payments, successful_payments, failed_payments, total_spent)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+     ON CONFLICT (id) DO UPDATE SET name = EXCLUDED.name, email = EXCLUDED.email, phone = EXCLUDED.phone`,
+    [customerId, DEMO_MERCHANT_ID, 'Priya Sharma', 'priya.sharma@example.com', '+919876543210', 12, 11, 1, 4500000]
+  )
+
+  // 4. Customer Features for Priya Sharma
+  await execute(
+    `INSERT INTO customer_features (customer_id, avg_transaction_amount, preferred_payment_method,
+     checkout_attempts_30d, recovery_success_rate, days_since_last_payment, payment_frequency_score, high_value_customer)
+     VALUES (?, ?, ?, ?, ?, ?, ?, TRUE)
+     ON CONFLICT (customer_id) DO UPDATE SET
+       preferred_payment_method = EXCLUDED.preferred_payment_method,
+       recovery_success_rate = EXCLUDED.recovery_success_rate,
+       high_value_customer = TRUE`,
+    [customerId, 375000, 'upi', 3, 0.92, 1, 0.85]
+  )
+
+  // 5. Canonical Demo Transaction: tx_demo_00042 (₹4,999, UPI, UPI_TIMEOUT)
+  await execute(
+    `INSERT INTO transactions (id, merchant_id, customer_id, external_id, amount, currency,
+     payment_method, status, failure_code, failure_reason, created_at, updated_at)
+     VALUES (?, ?, ?, ?, ?, 'INR', ?, 'failed', ?, ?, ?, ?)
+     ON CONFLICT (id) DO UPDATE SET
+       customer_id = EXCLUDED.customer_id,
+       amount = EXCLUDED.amount,
+       payment_method = EXCLUDED.payment_method,
+       status = EXCLUDED.status,
+       failure_code = EXCLUDED.failure_code,
+       failure_reason = EXCLUDED.failure_reason`,
+    [
+      'tx_demo_00042',
+      DEMO_MERCHANT_ID,
+      customerId,
+      'pay_demo_tx_demo_00042',
+      499900, // ₹4,999
+      'upi',
+      'UPI_TIMEOUT',
+      'Bank timeout — UPI_TIMEOUT',
+      created,
+      created
+    ]
+  )
+
+  // 6. Payment Event for tx_demo_00042
+  await execute(
+    `INSERT INTO payment_events (id, merchant_id, transaction_id, event_type, payload, idempotency_key, processed, source)
+     VALUES (?, ?, ?, 'payment.failed', ?, ?, TRUE, 'demo')
+     ON CONFLICT (idempotency_key) DO NOTHING`,
+    [
+      'evt_demo_tx_demo_00042',
+      DEMO_MERCHANT_ID,
+      'tx_demo_00042',
+      JSON.stringify({ transaction_id: 'tx_demo_00042' }),
+      'tx_demo_00042_payment.failed'
+    ]
+  )
+
+  // 7. Pristine Open Recovery Case for tx_demo_00042 (0 previous attempts)
+  await execute(
+    `INSERT INTO recovery_cases (id, merchant_id, transaction_id, customer_id, status, failure_category,
+     severity, recoverability_score, intent_score, expected_recovery, actual_recovery,
+     selected_strategy, diagnosis_reason, created_at, updated_at, resolved_at)
+     VALUES (?, ?, ?, ?, 'open', 'temporary_upi_failure', 'medium', 0.85, 0.92, 390921, NULL,
+     'WAIT_AND_RETRY', 'Bank timeout — UPI_TIMEOUT', ?, ?, NULL)
+     ON CONFLICT (id) DO UPDATE SET
+       status = 'open',
+       actual_recovery = NULL,
+       resolved_at = NULL,
+       updated_at = EXCLUDED.updated_at`,
+    [
+      'case_demo_0042',
+      DEMO_MERCHANT_ID,
+      'tx_demo_00042',
+      customerId,
+      created,
+      now
+    ]
+  )
+}
+
+export async function seedDemoData(): Promise<void> {
+  // Always guarantee the canonical demo transaction first
+  await ensureCanonicalDemoData()
+
+  // Check if broader transaction dataset already exists
+  const existingTx = await query<{ count: number }>(
+    'SELECT COUNT(*) as count FROM transactions WHERE merchant_id = ?',
+    [DEMO_MERCHANT_ID]
+  )
+
+  if ((existingTx[0]?.count ?? 0) >= 50) {
+    console.log('[seed] Demo dataset already exists, canonical tx ensured.')
+    return
+  }
+
+  console.log('[seed] Seeding demo dataset for dashboard & metrics...')
+
+  // 1. Create 25 customers
+  const customerIds: string[] = ['customer_demo_042']
   for (let i = 0; i < CUSTOMER_NAMES.length; i++) {
     const id = `customer_demo_${String(i).padStart(3, '0')}`
+    if (id === 'customer_demo_042') continue // already seeded as Priya Sharma
     customerIds.push(id)
     const totalPayments = randomInt(2, 30)
     const successfulPayments = randomInt(Math.floor(totalPayments * 0.6), totalPayments)
@@ -104,7 +205,8 @@ export async function seedDemoData(): Promise<void> {
     const firstName = name.split(' ')[0].toLowerCase()
     await execute(
       `INSERT INTO customers (id, merchant_id, name, email, phone, total_payments, successful_payments, failed_payments, total_spent)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+       ON CONFLICT (id) DO NOTHING`,
       [id, DEMO_MERCHANT_ID, name, `${firstName}@example.com`, `+9198${randomInt(10000000, 99999999)}`,
        totalPayments, successfulPayments, failedPayments, totalSpent]
     )
@@ -113,7 +215,8 @@ export async function seedDemoData(): Promise<void> {
     await execute(
       `INSERT INTO customer_features (customer_id, avg_transaction_amount, preferred_payment_method,
        checkout_attempts_30d, recovery_success_rate, days_since_last_payment, payment_frequency_score, high_value_customer)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+       ON CONFLICT (customer_id) DO NOTHING`,
       [id,
        Math.floor(totalSpent / (successfulPayments || 1)),
        randomItem(PAYMENT_METHODS),
@@ -125,68 +228,74 @@ export async function seedDemoData(): Promise<void> {
     )
   }
 
-  // 4. Create 1000 transactions — mix of successful + failed
-  const failedTransactionIds: string[] = []
-  for (let i = 0; i < 1000; i++) {
-    const txId = `tx_demo_${String(i).padStart(5, '0')}`
-    const customerId = randomItem(customerIds)
-    const hoursBack = randomInt(0, 72)
-    const created = hoursAgo(hoursBack)
+  // 2. Generate 1000 transactions — mix of successful + failed
+  const failedTransactions: { txId: string; customerId: string; amount: number; method: string; failure: typeof FAILURE_REASONS[0]; created: string }[] = []
 
-    // ~25% failure rate — realistic; ensure tx_demo_00042 is the canonical demo transaction
-    const isSpecialDemoTx = i === 42
-    const isFailed = isSpecialDemoTx ? true : Math.random() < 0.247
-    const status: TransactionStatus = isFailed ? 'failed' : 'captured'
-    const failure = isSpecialDemoTx
-      ? { code: 'UPI_TIMEOUT', reason: 'Bank timeout — UPI_TIMEOUT', category: 'temporary_upi_failure' as FailureCategory, recoverable: true }
-      : (isFailed ? randomItem(FAILURE_REASONS) : null)
-    const amount = isSpecialDemoTx ? 499900 : randomItem(AMOUNTS_PAISE)
-    const method = isSpecialDemoTx ? 'upi' : randomItem(PAYMENT_METHODS)
+  // Insert in batches of 50 for fast PostgreSQL execution
+  const BATCH_SIZE = 50
+  for (let batchStart = 0; batchStart < 1000; batchStart += BATCH_SIZE) {
+    const batchEnd = Math.min(batchStart + BATCH_SIZE, 1000)
+    const placeholders: string[] = []
+    const args: (string | number | null | boolean)[] = []
 
-    await execute(
-      `INSERT INTO transactions (id, merchant_id, customer_id, external_id, amount, currency,
-       payment_method, status, failure_code, failure_reason, created_at, updated_at)
-       VALUES (?, ?, ?, ?, ?, 'INR', ?, ?, ?, ?, ?, ?)`,
-      [txId, DEMO_MERCHANT_ID, customerId, `pay_demo_${txId}`,
-       amount, method, status,
-       failure?.code ?? null, failure?.reason ?? null, created, created]
-    )
+    for (let i = batchStart; i < batchEnd; i++) {
+      const txId = `tx_demo_${String(i).padStart(5, '0')}`
+      if (txId === 'tx_demo_00042') continue // already seeded as canonical demo tx
 
-    if (isFailed) {
-      failedTransactionIds.push(txId)
+      const customerId = randomItem(customerIds)
+      const hoursBack = randomInt(0, 72)
+      const created = hoursAgo(hoursBack)
+
+      const isFailed = Math.random() < 0.247
+      const status: TransactionStatus = isFailed ? 'failed' : 'captured'
+      const failure = isFailed ? randomItem(FAILURE_REASONS) : null
+      const amount = randomItem(AMOUNTS_PAISE)
+      const method = randomItem(PAYMENT_METHODS)
+
+      placeholders.push('(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)')
+      args.push(
+        txId, DEMO_MERCHANT_ID, customerId, `pay_demo_${txId}`,
+        amount, 'INR', method, status,
+        failure?.code ?? null, failure?.reason ?? null, created, created
+      )
+
+      if (isFailed && failure) {
+        failedTransactions.push({ txId, customerId, amount, method, failure, created })
+      }
+    }
+
+    if (placeholders.length > 0) {
+      await execute(
+        `INSERT INTO transactions (id, merchant_id, customer_id, external_id, amount, currency,
+         payment_method, status, failure_code, failure_reason, created_at, updated_at)
+         VALUES ${placeholders.join(', ')}
+         ON CONFLICT (id) DO NOTHING`,
+        args
+      )
     }
   }
 
-  // 5. Create payment events for failed transactions
-  for (const txId of failedTransactionIds) {
-    const eventId = `evt_demo_${uuidv4().slice(0, 8)}`
-    await execute(
-      `INSERT INTO payment_events (id, merchant_id, transaction_id, event_type, payload, idempotency_key, processed, source)
-       VALUES (?, ?, ?, 'payment.failed', ?, ?, TRUE, 'demo')`,
-      [eventId, DEMO_MERCHANT_ID, txId, JSON.stringify({ transaction_id: txId }), `${txId}_payment.failed`]
-    )
-  }
-
-  // 6. Create recovery cases for failed transactions (with realistic mix of outcomes)
+  // 3. Create payment events & recovery cases for failed transactions
+  const strategies: RecoveryAction[] = ['RETRY_PAYMENT', 'WAIT_AND_RETRY', 'GENERATE_PAYMENT_LINK', 'SEND_WHATSAPP', 'SEND_EMAIL']
   let recoveredCount = 0
   let totalRecovered = 0
 
-  for (let i = 0; i < failedTransactionIds.length; i++) {
-    const txId = failedTransactionIds[i]
+  for (let i = 0; i < failedTransactions.length; i++) {
+    const { txId, customerId, amount, failure, created } = failedTransactions[i]
     const caseId = `case_demo_${String(i).padStart(4, '0')}`
 
-    // Get the transaction
-    const txRows = await query<{ customer_id: string; amount: number; failure_code: string; payment_method: string; created_at: string }>(
-      'SELECT customer_id, amount, failure_code, payment_method, created_at FROM transactions WHERE id = ?',
-      [txId]
+    // Payment event
+    const eventId = `evt_demo_${uuidv4().slice(0, 8)}`
+    await execute(
+      `INSERT INTO payment_events (id, merchant_id, transaction_id, event_type, payload, idempotency_key, processed, source)
+       VALUES (?, ?, ?, 'payment.failed', ?, ?, TRUE, 'demo')
+       ON CONFLICT (idempotency_key) DO NOTHING`,
+      [eventId, DEMO_MERCHANT_ID, txId, JSON.stringify({ transaction_id: txId }), `${txId}_payment.failed`]
     )
-    if (!txRows[0]) continue
-    const tx = txRows[0]
 
-    const failureInfo = FAILURE_REASONS.find(f => f.code === tx.failure_code) ?? FAILURE_REASONS[0]
-    const recoverabilityScore = failureInfo.recoverable ? randomInt(40, 92) / 100 : randomInt(5, 25) / 100
+    const recoverabilityScore = failure.recoverable ? randomInt(40, 92) / 100 : randomInt(5, 25) / 100
     const intentScore = randomInt(45, 98) / 100
-    const expectedRecovery = Math.floor(tx.amount * recoverabilityScore * intentScore)
+    const expectedRecovery = Math.floor(amount * recoverabilityScore * intentScore)
 
     // Status distribution: ~45% recovered, ~25% failed, ~20% executing, ~10% open
     const rand = Math.random()
@@ -194,17 +303,15 @@ export async function seedDemoData(): Promise<void> {
     let actualRecovery: number | null = null
     let resolvedAt: string | null = null
 
-    if (txId === 'tx_demo_00042') {
-      caseStatus = 'open' // Pristine open case for Command Center demo (0 previous attempts)
-    } else if (rand < 0.45) {
+    if (rand < 0.45) {
       caseStatus = 'recovered'
-      actualRecovery = tx.amount
+      actualRecovery = amount
       recoveredCount++
-      totalRecovered += tx.amount
-      resolvedAt = new Date(new Date(tx.created_at).getTime() + randomInt(5, 120) * 60 * 1000).toISOString()
+      totalRecovered += amount
+      resolvedAt = new Date(new Date(created).getTime() + randomInt(5, 120) * 60 * 1000).toISOString()
     } else if (rand < 0.70) {
       caseStatus = 'failed'
-      resolvedAt = new Date(new Date(tx.created_at).getTime() + randomInt(60, 2880) * 60 * 1000).toISOString()
+      resolvedAt = new Date(new Date(created).getTime() + randomInt(60, 2880) * 60 * 1000).toISOString()
     } else if (rand < 0.85) {
       caseStatus = 'executing'
     } else if (rand < 0.92) {
@@ -213,19 +320,19 @@ export async function seedDemoData(): Promise<void> {
       caseStatus = 'open'
     }
 
-    const strategies: RecoveryAction[] = ['RETRY_PAYMENT', 'WAIT_AND_RETRY', 'GENERATE_PAYMENT_LINK', 'SEND_WHATSAPP', 'SEND_EMAIL']
-    const selectedStrategy = failureInfo.recoverable ? randomItem(strategies) : 'NO_ACTION'
+    const selectedStrategy = failure.recoverable ? randomItem(strategies) : 'NO_ACTION'
 
     await execute(
       `INSERT INTO recovery_cases (id, merchant_id, transaction_id, customer_id, status, failure_category,
        severity, recoverability_score, intent_score, expected_recovery, actual_recovery,
        selected_strategy, diagnosis_reason, created_at, updated_at, resolved_at)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-      [caseId, DEMO_MERCHANT_ID, txId, tx.customer_id, caseStatus, failureInfo.category,
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+       ON CONFLICT (id) DO NOTHING`,
+      [caseId, DEMO_MERCHANT_ID, txId, customerId, caseStatus, failure.category,
        recoverabilityScore > 0.7 ? 'high' : recoverabilityScore > 0.4 ? 'medium' : 'low',
        recoverabilityScore, intentScore, expectedRecovery, actualRecovery ?? null,
-       selectedStrategy, failureInfo.reason,
-       tx.created_at, new Date().toISOString(), resolvedAt ?? null]
+       selectedStrategy, failure.reason,
+       created, new Date().toISOString(), resolvedAt ?? null]
     )
 
     // Create recovery attempts for non-open cases
@@ -237,20 +344,22 @@ export async function seedDemoData(): Promise<void> {
       await execute(
         `INSERT INTO recovery_attempts (id, case_id, attempt_number, strategy, status,
          amount_recovered, started_at, completed_at, idempotency_key)
-         VALUES (?, ?, 1, ?, ?, ?, ?, ?, ?)`,
+         VALUES (?, ?, 1, ?, ?, ?, ?, ?, ?)
+         ON CONFLICT (idempotency_key) DO NOTHING`,
         [attemptId, caseId, selectedStrategy, attemptStatus,
-         actualRecovery ?? null, tx.created_at,
+         actualRecovery ?? null, created,
          resolvedAt ?? null, idempotencyKey]
       )
 
       // Agent decision record
       const decisionId = `decision_demo_${uuidv4().slice(0, 8)}`
-      const reasoning = generateReasoning(failureInfo.category, recoverabilityScore, intentScore)
+      const reasoning = generateReasoning(failure.category, recoverabilityScore, intentScore)
       await execute(
         `INSERT INTO agent_decisions (id, case_id, agent_type, input_summary, decision, confidence, reasoning, model_used)
-         VALUES (?, ?, 'strategy', ?, ?, ?, ?, 'deterministic-fallback')`,
+         VALUES (?, ?, 'strategy', ?, ?, ?, ?, 'deterministic-fallback')
+         ON CONFLICT (id) DO NOTHING`,
         [decisionId, caseId,
-         JSON.stringify({ failure_category: failureInfo.category, amount: tx.amount }),
+         JSON.stringify({ failure_category: failure.category, amount }),
          JSON.stringify({ action: selectedStrategy }),
          recoverabilityScore * intentScore,
          reasoning]
@@ -258,7 +367,7 @@ export async function seedDemoData(): Promise<void> {
     }
   }
 
-  console.log(`[seed] Created ${failedTransactionIds.length} recovery cases`)
+  console.log(`[seed] Created ${failedTransactions.length} recovery cases`)
   console.log(`[seed] ${recoveredCount} recovered, ₹${Math.floor(totalRecovered / 100).toLocaleString('en-IN')} recovered`)
   console.log('[seed] Demo seed complete.')
 }

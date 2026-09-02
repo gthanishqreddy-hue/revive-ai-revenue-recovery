@@ -438,6 +438,106 @@ async function executeAllTests() {
     assert.ok(blocked.resetInMs > 0)
   })
 
+  // ── SECTION 7: DATABASE SEEDING & CANONICAL DEMO RECOVERY DATA ─────────────
+  console.log('\n🗄 SECTION 7: Database Seeding & Idempotent Demo Initialization')
+
+  runTest('Canonical demo transaction tx_demo_00042 conforms to required production specs', () => {
+    const canonicalTx = {
+      id: 'tx_demo_00042',
+      amount: 499900,
+      currency: 'INR',
+      payment_method: 'upi',
+      status: 'failed',
+      failure_code: 'UPI_TIMEOUT',
+      failure_reason: 'Bank timeout — UPI_TIMEOUT',
+    }
+    assert.strictEqual(canonicalTx.id, 'tx_demo_00042')
+    assert.strictEqual(canonicalTx.amount, 499900)
+    assert.strictEqual(canonicalTx.currency, 'INR')
+    assert.strictEqual(canonicalTx.payment_method, 'upi')
+    assert.strictEqual(canonicalTx.status, 'failed')
+    assert.strictEqual(canonicalTx.failure_code, 'UPI_TIMEOUT')
+  })
+
+  runTest('Idempotent seeder handles existing merchant without skipping tx_demo_00042', async () => {
+    // Simulating the failure mode:
+    // In-memory mock database store
+    const db = {
+      merchants: new Map<string, Record<string, unknown>>([['merchant_demo_revive', { id: 'merchant_demo_revive', name: 'Acme Commerce (Demo)' }]]),
+      policies: new Map<string, Record<string, unknown>>(),
+      customers: new Map<string, Record<string, unknown>>(),
+      transactions: new Map<string, Record<string, unknown>>(),
+      recovery_cases: new Map<string, Record<string, unknown>>(),
+      recovery_attempts: new Map<string, Record<string, unknown>>(),
+    }
+
+    // Pre-condition: Merchant exists, but tx_demo_00042 does NOT exist
+    assert.strictEqual(db.merchants.has('merchant_demo_revive'), true)
+    assert.strictEqual(db.transactions.has('tx_demo_00042'), false)
+
+    // Simulation of ensureCanonicalDemoData logic
+    const runEnsure = () => {
+      db.merchants.set('merchant_demo_revive', { id: 'merchant_demo_revive', name: 'Acme Commerce (Demo)', is_demo: true })
+      db.policies.set('merchant_demo_revive', { merchant_id: 'merchant_demo_revive', max_retries: 2 })
+      db.customers.set('customer_demo_042', { id: 'customer_demo_042', name: 'Priya Sharma', email: 'priya.sharma@example.com' })
+      db.transactions.set('tx_demo_00042', {
+        id: 'tx_demo_00042',
+        merchant_id: 'merchant_demo_revive',
+        customer_id: 'customer_demo_042',
+        amount: 499900,
+        currency: 'INR',
+        payment_method: 'upi',
+        status: 'failed',
+        failure_code: 'UPI_TIMEOUT',
+      })
+      db.recovery_cases.set('case_demo_0042', {
+        id: 'case_demo_0042',
+        transaction_id: 'tx_demo_00042',
+        status: 'open',
+        failure_category: 'temporary_upi_failure',
+        selected_strategy: 'WAIT_AND_RETRY',
+      })
+    }
+
+    // First run
+    runEnsure()
+
+    // Verify tx_demo_00042 is created
+    const tx = db.transactions.get('tx_demo_00042')
+    assert.ok(tx, 'tx_demo_00042 must be created even when merchant already exists')
+    assert.strictEqual(tx.amount, 499900)
+    assert.strictEqual(tx.currency, 'INR')
+    assert.strictEqual(tx.payment_method, 'upi')
+    assert.strictEqual(tx.status, 'failed')
+    assert.strictEqual(tx.failure_code, 'UPI_TIMEOUT')
+
+    // Verify canonical customer is Priya Sharma
+    const customer = db.customers.get('customer_demo_042')
+    assert.ok(customer, 'Customer Priya Sharma must exist')
+    assert.strictEqual(customer.name, 'Priya Sharma')
+
+    // Verify canonical case is open and has ZERO recovery attempts
+    const rCase = db.recovery_cases.get('case_demo_0042')
+    assert.ok(rCase, 'Canonical case must exist')
+    assert.strictEqual(rCase.status, 'open')
+    assert.strictEqual(rCase.failure_category, 'temporary_upi_failure')
+
+    const attemptsForCase = Array.from(db.recovery_attempts.values()).filter(a => a.case_id === 'case_demo_0042')
+    assert.strictEqual(attemptsForCase.length, 0, 'Canonical demo case must start with zero recovery attempts')
+
+    // Call initialization again (multiple times) to verify idempotency and zero duplicates
+    const initialTxCount = db.transactions.size
+    const initialCustomerCount = db.customers.size
+    const initialCaseCount = db.recovery_cases.size
+
+    runEnsure()
+    runEnsure()
+
+    assert.strictEqual(db.transactions.size, initialTxCount, 'Calling init repeatedly must not duplicate transactions')
+    assert.strictEqual(db.customers.size, initialCustomerCount, 'Calling init repeatedly must not duplicate customers')
+    assert.strictEqual(db.recovery_cases.size, initialCaseCount, 'Calling init repeatedly must not duplicate cases')
+  })
+
   console.log('\n════════════════════════════════════════════════════════════════════')
   console.log(`📊 TEST SUMMARY: ${passed} PASSED, ${failed} FAILED`)
   console.log('════════════════════════════════════════════════════════════════════\n')

@@ -6,7 +6,7 @@ import { z } from 'zod'
 import { query, execute } from '@/lib/db/client'
 import { runRecoveryPipeline } from '@/lib/engine/orchestrator'
 import { checkRateLimit } from '@/lib/rate-limit'
-import { DEMO_MERCHANT_ID } from '@/lib/db/seed'
+import { DEMO_MERCHANT_ID, ensureCanonicalDemoData } from '@/lib/db/seed'
 import { v4 as uuidv4 } from 'uuid'
 
 export const maxDuration = 60 // 60 second timeout for simulation
@@ -75,6 +75,9 @@ export async function POST(req: Request) {
     const merchantId = DEMO_MERCHANT_ID
 
     if (singleTx) {
+      if (singleTx === 'tx_demo_00042') {
+        await ensureCanonicalDemoData()
+      }
       // Single transaction recovery — used by demo command center
       const result = await runRecoveryPipeline(singleTx, merchantId, true)
       return NextResponse.json({ success: true, result })
