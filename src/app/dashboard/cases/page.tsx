@@ -69,7 +69,7 @@ export default function CasesPage() {
     setLoading(true)
     setError(null)
     try {
-      const res = await fetch('/api/cases')
+      const res = await fetch('/api/cases', { cache: 'no-store' })
       if (!res.ok) {
         throw new Error(`Failed to load recovery cases (${res.status})`)
       }

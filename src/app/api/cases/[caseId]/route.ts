@@ -4,6 +4,9 @@
 import { NextResponse } from 'next/server'
 import { query } from '@/lib/db/client'
 
+export const dynamic = 'force-dynamic'
+export const revalidate = 0
+
 export async function GET(
   _req: Request,
   { params }: { params: Promise<{ caseId: string }> }
@@ -57,15 +60,30 @@ export async function GET(
         )
       : []
 
-    return NextResponse.json({
-      case: cases[0],
-      decisions,
-      attempts,
-      runs,
-      features: features[0] ?? null,
-    })
+    return NextResponse.json(
+      {
+        case: cases[0],
+        decisions,
+        attempts,
+        runs,
+        features: features[0] ?? null,
+      },
+      {
+        headers: {
+          'Cache-Control': 'no-store, no-cache, must-revalidate, max-age=0',
+        },
+      }
+    )
   } catch (err) {
     const message = err instanceof Error ? err.message : 'Unknown error'
-    return NextResponse.json({ error: message }, { status: 500 })
+    return NextResponse.json(
+      { error: message },
+      {
+        status: 500,
+        headers: {
+          'Cache-Control': 'no-store, no-cache, must-revalidate, max-age=0',
+        },
+      }
+    )
   }
 }

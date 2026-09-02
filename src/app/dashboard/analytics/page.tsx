@@ -36,7 +36,7 @@ export default function AnalyticsPage() {
     setLoading(true)
     setError(null)
     try {
-      const res = await fetch('/api/dashboard')
+      const res = await fetch('/api/dashboard', { cache: 'no-store' })
       if (!res.ok) {
         throw new Error(`Failed to load analytics (${res.status})`)
       }

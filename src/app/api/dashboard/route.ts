@@ -5,6 +5,9 @@ import { NextResponse } from 'next/server'
 import { query } from '@/lib/db/client'
 import { DEMO_MERCHANT_ID } from '@/lib/db/seed'
 
+export const dynamic = 'force-dynamic'
+export const revalidate = 0
+
 export async function GET() {
   try {
     const merchantId = DEMO_MERCHANT_ID
@@ -124,38 +127,53 @@ export async function GET() {
     const openCount = openCases[0]?.count ?? 0
     const failedCount = failedCases[0]?.count ?? Math.max(0, totalCases - recoveredCount - openCount)
 
-    return NextResponse.json({
-      metrics: {
-        revenue_at_risk: totalAtRisk,
-        recoverable: totalRecoverable,
-        recovered: totalRecovered,
-        recovery_rate: totalCases > 0 ? Math.round((recoveredCount / totalCases) * 1000) / 10 : 0,
-        recovered_cases: recoveredCount,
-        open_cases: openCount,
-        in_progress_cases: openCount,
-        failed_cases: failedCount,
-        total_cases: totalCases,
-        actions_executed: actionsExecuted[0]?.count ?? 0,
+    return NextResponse.json(
+      {
+        metrics: {
+          revenue_at_risk: totalAtRisk,
+          recoverable: totalRecoverable,
+          recovered: totalRecovered,
+          recovery_rate: totalCases > 0 ? Math.round((recoveredCount / totalCases) * 1000) / 10 : 0,
+          recovered_cases: recoveredCount,
+          open_cases: openCount,
+          in_progress_cases: openCount,
+          failed_cases: failedCount,
+          total_cases: totalCases,
+          actions_executed: actionsExecuted[0]?.count ?? 0,
+        },
+        by_method: byMethod.map((m) => ({
+          method: m.payment_method,
+          total_cases: m.total,
+          recovered_cases: m.recovered,
+          recovered_amount: m.recovered_amount,
+          recovery_rate: m.total > 0 ? Math.round((m.recovered / m.total) * 100) : 0,
+        })),
+        by_category: byCategory,
+        by_action: byAction.map((a) => ({
+          action: a.strategy,
+          total_attempts: a.total,
+          successful: a.successful,
+          success_rate: a.total > 0 ? Math.round((a.successful / a.total) * 100) : 0,
+          recovered_amount: a.recovered_amount,
+        })),
+        activity,
       },
-      by_method: byMethod.map((m) => ({
-        method: m.payment_method,
-        total_cases: m.total,
-        recovered_cases: m.recovered,
-        recovered_amount: m.recovered_amount,
-        recovery_rate: m.total > 0 ? Math.round((m.recovered / m.total) * 100) : 0,
-      })),
-      by_category: byCategory,
-      by_action: byAction.map((a) => ({
-        action: a.strategy,
-        total_attempts: a.total,
-        successful: a.successful,
-        success_rate: a.total > 0 ? Math.round((a.successful / a.total) * 100) : 0,
-        recovered_amount: a.recovered_amount,
-      })),
-      activity,
-    })
+      {
+        headers: {
+          'Cache-Control': 'no-store, no-cache, must-revalidate, max-age=0',
+        },
+      }
+    )
   } catch (err) {
     const message = err instanceof Error ? err.message : 'Unknown error'
-    return NextResponse.json({ error: message }, { status: 500 })
+    return NextResponse.json(
+      { error: message },
+      {
+        status: 500,
+        headers: {
+          'Cache-Control': 'no-store, no-cache, must-revalidate, max-age=0',
+        },
+      }
+    )
   }
 }

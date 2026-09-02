@@ -110,6 +110,7 @@ CREATE TABLE IF NOT EXISTS recovery_cases (
 CREATE INDEX IF NOT EXISTS idx_cases_merchant ON recovery_cases(merchant_id);
 CREATE INDEX IF NOT EXISTS idx_cases_status ON recovery_cases(status);
 CREATE INDEX IF NOT EXISTS idx_cases_transaction ON recovery_cases(transaction_id);
+CREATE UNIQUE INDEX IF NOT EXISTS idx_recovery_cases_merchant_tx ON recovery_cases(merchant_id, transaction_id);
 
 -- ============================================================
 -- RECOVERY_ATTEMPTS

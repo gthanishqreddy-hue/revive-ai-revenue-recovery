@@ -5,6 +5,9 @@ import { NextResponse } from 'next/server'
 import { query } from '@/lib/db/client'
 import { DEMO_MERCHANT_ID } from '@/lib/db/seed'
 
+export const dynamic = 'force-dynamic'
+export const revalidate = 0
+
 export async function GET() {
   try {
     const activity = await query<Record<string, unknown>>(
@@ -29,8 +32,23 @@ export async function GET() {
       [DEMO_MERCHANT_ID]
     )
 
-    return NextResponse.json({ activity, agent_runs: agentRuns })
+    return NextResponse.json(
+      { activity, agent_runs: agentRuns },
+      {
+        headers: {
+          'Cache-Control': 'no-store, no-cache, must-revalidate, max-age=0',
+        },
+      }
+    )
   } catch (err) {
-    return NextResponse.json({ error: String(err) }, { status: 500 })
+    return NextResponse.json(
+      { error: String(err) },
+      {
+        status: 500,
+        headers: {
+          'Cache-Control': 'no-store, no-cache, must-revalidate, max-age=0',
+        },
+      }
+    )
   }
 }

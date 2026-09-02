@@ -66,7 +66,7 @@ export default function ActivityPage() {
   const fetchData = useCallback(async () => {
     try {
       setError(null)
-      const res = await fetch('/api/activity')
+      const res = await fetch('/api/activity', { cache: 'no-store' })
       if (!res.ok) {
         throw new Error(`Failed to load activity (${res.status})`)
       }

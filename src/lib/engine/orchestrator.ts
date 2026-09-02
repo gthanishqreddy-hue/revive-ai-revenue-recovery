@@ -92,31 +92,42 @@ export async function runRecoveryPipeline(
     : []
   const features = featureRows[0] ?? null
 
-  // Find or create recovery case
+  // Find or create recovery case — strictly 1 canonical case per transaction
   let caseId: string
-  let existingCase = await query<RecoveryCase>(
-    'SELECT * FROM recovery_cases WHERE transaction_id = ? AND merchant_id = ?',
+  const existingCase = await query<RecoveryCase>(
+    'SELECT * FROM recovery_cases WHERE transaction_id = ? AND merchant_id = ? LIMIT 1',
     [transactionId, merchantId]
   )
 
-  if (existingCase.length === 0 || forceNew) {
+  if (existingCase.length > 0) {
+    caseId = existingCase[0].id
+    // If already recovered and not forced, return existing outcome
+    if (existingCase[0].status === 'recovered' && !forceNew) {
+      return {
+        caseId,
+        action: (existingCase[0].selected_strategy as RecoveryAction) || 'NO_ACTION',
+        success: true,
+        recovered: true,
+        amountRecovered: existingCase[0].actual_recovery ?? transaction.amount,
+        reasoning: ['Case already recovered'],
+        stages: [],
+        modelUsed: 'deterministic-fallback',
+        aiUsed: false,
+      }
+    }
+    // Re-running a demo or recovery case resets the existing case in-place without creating duplicates
+    await execute(
+      `UPDATE recovery_cases SET status = 'open', actual_recovery = NULL, resolved_at = NULL, updated_at = ? WHERE id = ?`,
+      [new Date().toISOString(), caseId]
+    )
+  } else {
     caseId = uuidv4()
     await execute(
       `INSERT INTO recovery_cases (id, merchant_id, transaction_id, customer_id, status)
-       VALUES (?, ?, ?, ?, 'open')`,
+       VALUES (?, ?, ?, ?, 'open')
+       ON CONFLICT (id) DO UPDATE SET status = 'open', updated_at = EXCLUDED.updated_at`,
       [caseId, merchantId, transactionId, customer?.id ?? null]
     )
-    existingCase = [{ id: caseId, status: 'open' } as RecoveryCase]
-  } else {
-    caseId = existingCase[0].id
-    // If already recovered, don't re-process
-    if (existingCase[0].status === 'recovered' && !forceNew) {
-      return {
-        caseId, action: 'NO_ACTION', success: false, recovered: true,
-        amountRecovered: existingCase[0].actual_recovery ?? 0,
-        reasoning: ['Case already recovered'], stages: [],
-      }
-    }
   }
 
   stages.push({

@@ -5,6 +5,9 @@ import { NextResponse } from 'next/server'
 import { query } from '@/lib/db/client'
 import { DEMO_MERCHANT_ID } from '@/lib/db/seed'
 
+export const dynamic = 'force-dynamic'
+export const revalidate = 0
+
 export async function GET() {
   try {
     const merchantId = DEMO_MERCHANT_ID
@@ -36,9 +39,24 @@ export async function GET() {
       [merchantId]
     )
 
-    return NextResponse.json({ transactions: rows })
+    return NextResponse.json(
+      { transactions: rows },
+      {
+        headers: {
+          'Cache-Control': 'no-store, no-cache, must-revalidate, max-age=0',
+        },
+      }
+    )
   } catch (err) {
     const message = err instanceof Error ? err.message : 'Unknown error'
-    return NextResponse.json({ error: message }, { status: 500 })
+    return NextResponse.json(
+      { error: message },
+      {
+        status: 500,
+        headers: {
+          'Cache-Control': 'no-store, no-cache, must-revalidate, max-age=0',
+        },
+      }
+    )
   }
 }

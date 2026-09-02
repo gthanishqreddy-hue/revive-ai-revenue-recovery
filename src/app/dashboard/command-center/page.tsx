@@ -95,6 +95,7 @@ function useAnimatedPipeline() {
     try {
       const res = await fetch('/api/simulation', {
         method: 'POST',
+        cache: 'no-store',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ transactionId: DEMO_TX.id }),
       })
@@ -151,13 +152,21 @@ function useAnimatedPipeline() {
     setRunning(false)
   }, [])
 
-  return { stages, running, result, error, currentStage, run }
+  const resetPipeline = useCallback(() => {
+    setStages([])
+    setResult(null)
+    setError(null)
+    setCurrentStage(-1)
+    setRunning(false)
+  }, [])
+
+  return { stages, running, result, error, currentStage, run, reset: resetPipeline }
 }
 
 // ── Page ─────────────────────────────────────────────────────────────────────
 
 export default function CommandCenterPage() {
-  const { stages, running, result, error, currentStage, run } = useAnimatedPipeline()
+  const { stages, running, result, error, currentStage, run, reset: resetPipeline } = useAnimatedPipeline()
   const [simRunning, setSimRunning] = useState(false)
   const [simResult,  setSimResult]  = useState<SimResult | null>(null)
   const [simError,   setSimError]   = useState<string | null>(null)
@@ -171,7 +180,7 @@ export default function CommandCenterPage() {
   })
 
   useEffect(() => {
-    fetch('/api/ai-status')
+    fetch('/api/ai-status', { cache: 'no-store' })
       .then(res => res.json())
       .then(data => {
         if (data.statusLabel) setAiStatus(data)
@@ -180,6 +189,9 @@ export default function CommandCenterPage() {
   }, [])
 
   const reset = () => {
+    resetPipeline()
+    setSimResult(null)
+    setSimError(null)
     setResetKey(k => k + 1)
   }
 
@@ -194,6 +206,7 @@ export default function CommandCenterPage() {
     try {
       const res = await fetch('/api/simulation', {
         method: 'POST',
+        cache: 'no-store',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({}),
       })

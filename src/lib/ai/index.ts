@@ -38,7 +38,7 @@ export function getAIRuntimeStatus(): {
     available,
     providerName: provider.name,
     modelName: available ? provider.modelName : 'deterministic-fallback',
-    statusLabel: available ? `AI ACTIVE (${provider.modelName})` : 'AI FALLBACK (Deterministic Safety Floor)',
+    statusLabel: available ? `AI READY (${provider.modelName})` : 'AI DISABLED (Deterministic Safety Floor)',
   }
 }
 
