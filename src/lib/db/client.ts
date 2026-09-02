@@ -5,6 +5,7 @@
 // to PostgreSQL `$1, $2, ...` so that consumer code requires zero changes.
 
 import { neon, type NeonQueryFunction } from '@neondatabase/serverless'
+import { loadEnvConfig } from '@next/env'
 import path from 'path'
 import fs from 'fs'
 
@@ -12,7 +13,13 @@ let _sql: NeonQueryFunction<false, false> | null = null
 
 function getSql(): NeonQueryFunction<false, false> {
   if (!_sql) {
-    const databaseUrl = process.env.DATABASE_URL
+    let databaseUrl = process.env.DATABASE_URL
+    if (!databaseUrl) {
+      try {
+        loadEnvConfig(process.cwd())
+        databaseUrl = process.env.DATABASE_URL
+      } catch {}
+    }
     if (!databaseUrl) {
       throw new Error(
         'DATABASE_URL environment variable is required. ' +

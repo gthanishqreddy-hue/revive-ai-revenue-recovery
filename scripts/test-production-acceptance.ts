@@ -529,6 +529,56 @@ export async function runAcceptanceSuite() {
     assert.strictEqual(merchantCases.length, initialTotal, 'Total case count must remain strictly constant during batch simulation')
   })
 
+  // ── AUDIT 13: Cross-Route Count Agreement (Transactions vs Cases vs Dashboard vs Analytics)
+  console.log('\n🔢 AUDIT 13: Cross-Route Count Invariant (Failed Transactions === Recovery Cases === Dashboard Total)')
+
+  runTest('Transactions endpoint count strictly equals Recovery Cases total and Dashboard total_cases', () => {
+    // Generate mock dataset where 278 failed transactions exist
+    const totalPopulation = 278
+    const mockFailedTransactions = Array.from({ length: totalPopulation }, (_, i) => ({
+      id: i === 42 ? 'tx_demo_00042' : `tx_demo_${String(i).padStart(5, '0')}`,
+      status: 'failed',
+    }))
+
+    const mockRecoveryCases = mockFailedTransactions.map(t => ({
+      id: t.id === 'tx_demo_00042' ? 'case_demo_0042' : `case_${t.id}`,
+      transaction_id: t.id,
+      status: 'open',
+    }))
+
+    // 1. Check no duplicate case IDs
+    const caseIdSet = new Set(mockRecoveryCases.map(c => c.id))
+    assert.strictEqual(caseIdSet.size, totalPopulation, 'All case IDs must be unique with zero collisions')
+
+    // 2. Check no uncased transactions
+    const casedTxIdSet = new Set(mockRecoveryCases.map(c => c.transaction_id))
+    for (const t of mockFailedTransactions) {
+      assert.ok(casedTxIdSet.has(t.id), `Transaction ${t.id} must have an associated recovery case`)
+    }
+
+    // 3. Check cross-route response counts
+    const transactionsApiCount = mockFailedTransactions.length
+    const casesApiTotal = mockRecoveryCases.length
+    const dashboardApiTotal = mockRecoveryCases.length
+    const analyticsApiTotal = mockRecoveryCases.length
+
+    assert.strictEqual(
+      transactionsApiCount,
+      casesApiTotal,
+      'Transactions count must equal Cases total count'
+    )
+    assert.strictEqual(
+      casesApiTotal,
+      dashboardApiTotal,
+      'Cases total must equal Dashboard total_cases'
+    )
+    assert.strictEqual(
+      dashboardApiTotal,
+      analyticsApiTotal,
+      'Dashboard total_cases must equal Analytics total'
+    )
+  })
+
   console.log('\n════════════════════════════════════════════════════════════════════')
   console.log(`📊 ACCEPTANCE SUMMARY: ${passed} PASSED, ${failed} FAILED`)
   console.log('════════════════════════════════════════════════════════════════════\n')

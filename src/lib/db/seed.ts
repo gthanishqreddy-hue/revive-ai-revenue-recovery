@@ -172,6 +172,36 @@ export async function ensureCanonicalDemoData(): Promise<void> {
       now
     ]
   )
+
+  // 8. Self-heal any uncased failed transactions to strictly maintain 1 failed transaction -> 1 recovery case invariant
+  const uncasedFailedTx = await query<{
+    id: string
+    merchant_id: string
+    customer_id: string
+    amount: number
+    failure_code: string
+    failure_reason: string
+    created_at: string
+  }>(
+    `SELECT t.id, t.merchant_id, t.customer_id, t.amount, t.failure_code, t.failure_reason, t.created_at
+     FROM transactions t
+     LEFT JOIN recovery_cases rc ON t.id = rc.transaction_id
+     WHERE t.merchant_id = ? AND t.status = 'failed' AND rc.id IS NULL`,
+    [DEMO_MERCHANT_ID]
+  )
+
+  for (const t of uncasedFailedTx) {
+    const caseId = `case_${t.id}`
+    await execute(
+      `INSERT INTO recovery_cases (id, merchant_id, transaction_id, customer_id, status, failure_category,
+       severity, recoverability_score, intent_score, expected_recovery, actual_recovery,
+       selected_strategy, diagnosis_reason, created_at, updated_at)
+       VALUES (?, ?, ?, ?, 'open', 'temporary_upi_failure', 'medium', 0.80, 0.85, ?, NULL,
+       'WAIT_AND_RETRY', ?, ?, ?)
+       ON CONFLICT (id) DO NOTHING`,
+      [caseId, t.merchant_id, t.id, t.customer_id, Math.floor(t.amount * 0.68), t.failure_reason || 'Failed payment', t.created_at, new Date().toISOString()]
+    )
+  }
 }
 
 export async function seedDemoData(): Promise<void> {
@@ -282,7 +312,7 @@ export async function seedDemoData(): Promise<void> {
 
   for (let i = 0; i < failedTransactions.length; i++) {
     const { txId, customerId, amount, failure, created } = failedTransactions[i]
-    const caseId = `case_demo_${String(i).padStart(4, '0')}`
+    const caseId = `case_${txId}`
 
     // Payment event
     const eventId = `evt_demo_${uuidv4().slice(0, 8)}`
